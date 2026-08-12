@@ -1,0 +1,1422 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Leave & Attendance Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root {
+      --dark: #23262b;
+      --dark-light: #383c42;
+      --orange: #f2830f;
+      --orange-dark: #d96c00;
+      --orange-light: #fff1e0;
+      --green: #1e8e3e;
+      --green-light: #e6f4ea;
+      --amber: #b26a00;
+      --amber-light: #fff3d6;
+      --amber-border: #f0c674;
+      --red: #d93025;
+      --red-light: #fce8e6;
+      --ink: #1b1e2e;
+      --muted: #6b7280;
+      --border: #e3e5ea;
+      --bg: #f4f5f8;
+      --card: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+    }
+    header {
+      background: var(--dark);
+      border-bottom: 3px solid var(--orange);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { font-size: 18px; margin: 0; color: #fff; }
+    header .sub { font-size: 12px; color: #aeb2c9; margin-top: 2px; }
+    nav {
+      display: flex;
+      gap: 8px;
+      padding: 16px 24px;
+      background: var(--bg);
+    }
+    nav button {
+      border: 1px solid var(--border);
+      background: var(--card);
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--ink);
+    }
+    nav button.active {
+      background: var(--dark);
+      border-color: var(--dark);
+      color: #fff;
+    }
+    main { padding: 0 24px 24px; max-width: 1200px; margin: 0 auto; }
+
+    @media (max-width: 640px) {
+      header { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+      nav {
+        padding: 12px 16px;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        -webkit-overflow-scrolling: touch;
+      }
+      nav button { flex-shrink: 0; }
+      main { padding: 0 16px 16px; }
+      form.filters { align-items: stretch; }
+      form.filters .field { min-width: 0; flex: 1 1 140px; }
+    }
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 20px;
+    }
+    .stat-tile .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .stat-tile .value { font-size: 32px; font-weight: 700; margin-top: 4px; color: var(--ink); }
+    .stat-tile.tone-orange .value { color: var(--orange-dark); }
+    .stat-tile.tone-green .value { color: var(--green); }
+    .stat-tile.tone-red .value { color: var(--red); }
+    .stat-tile .footnote { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+    .panel-title { font-size: 14px; font-weight: 600; margin: 0 0 12px; display: flex; justify-content: space-between; align-items: center; }
+    .panel-title .hint { font-weight: 400; color: var(--muted); font-size: 12px; }
+
+    .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; }
+    .bar-row .bar-label { width: 90px; flex-shrink: 0; color: var(--muted); text-align: right; }
+    .bar-row .bar-track { flex: 1; background: var(--bg); border-radius: 4px; overflow: hidden; height: 18px; }
+    .bar-row .bar-fill { background: var(--dark); height: 100%; border-radius: 4px; }
+    .bar-row .bar-fill.amber { background: var(--orange); }
+    .bar-row .bar-value { width: 32px; text-align: right; color: var(--ink); font-weight: 600; }
+
+    form.filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 20px; }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field label { font-size: 12px; color: var(--muted); }
+    .field input, .field select {
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      min-width: 150px;
+    }
+    button.primary {
+      background: var(--orange);
+      color: #fff;
+      border: none;
+      padding: 9px 18px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button.primary:hover { background: var(--orange-dark); }
+    button.primary:disabled { background: #f7c894; cursor: default; }
+    button.secondary {
+      background: none;
+      border: 1px solid var(--border);
+      padding: 9px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      color: var(--ink);
+    }
+
+    .status-line { font-size: 13px; margin-bottom: 12px; min-height: 18px; }
+    .status-line.error { color: var(--red); }
+    .status-line.success { color: var(--green); }
+    .status-line.loading { color: var(--muted); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--card); }
+    thead th {
+      position: sticky; top: 0;
+      background: #eef0f5;
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    tbody td { padding: 7px 10px; border-bottom: 1px solid #eee; white-space: nowrap; }
+    tbody tr:hover { background: var(--orange-light); }
+    .table-wrap { max-height: 480px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+    .empty-state { text-align: center; color: var(--muted); padding: 40px; font-size: 13px; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; background: var(--orange-light); color: var(--orange-dark); font-size: 11px; font-weight: 600; }
+
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; letter-spacing: .01em; white-space: nowrap; }
+    .badge-zone { background: var(--dark); color: #fff; }
+    .badge-done { background: var(--green-light); color: var(--green); border: 1px solid #bfe3c9; }
+    .badge-progress { background: var(--orange-light); color: var(--orange-dark); border: 1px solid #f6c896; }
+    .badge-neutral { background: #eef0f4; color: var(--muted); border: 1px solid var(--border); }
+    .badge-amber { background: var(--amber-light); color: var(--amber); border: 1px solid var(--amber-border); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <h1>Leave &amp; Attendance Dashboard</h1>
+      <div class="sub">Backed by Supabase</div>
+    </div>
+    <span class="pill" id="clock"></span>
+  </header>
+
+  <nav>
+    <button class="tab-btn active" data-view="dashboard">Dashboard</button>
+    <button class="tab-btn" data-view="leave">Leave Report</button>
+    <button class="tab-btn" data-view="missing">Missing Entries</button>
+    <button class="tab-btn" data-view="entries">Entries</button>
+    <button class="tab-btn" data-view="worksummary">Work Summary</button>
+    <button class="tab-btn" data-view="employees">Employees</button>
+    <button class="tab-btn" data-view="zones">Zones</button>
+    <button class="tab-btn" data-view="adminlogin">Admin Login</button>
+  </nav>
+
+  <main>
+
+    <!-- ===================== DASHBOARD VIEW ===================== -->
+    <section id="view-dashboard" class="view active">
+      <div class="status-line" id="dashboard-status"></div>
+
+      <div class="grid" id="dashboard-tiles">
+        <div class="card stat-tile"><div class="label">Total Employees</div><div class="value">&mdash;</div></div>
+        <div class="card stat-tile tone-orange"><div class="label">On Leave (last 30 days)</div><div class="value">&mdash;</div></div>
+        <div class="card stat-tile tone-red"><div class="label">Missing Entries (last 30 days)</div><div class="value">&mdash;</div></div>
+        <div class="card stat-tile tone-green"><div class="label">Unmatched Entries</div><div class="value">&mdash;</div></div>
+      </div>
+
+      <div class="grid" style="grid-template-columns: 1fr 1fr;">
+        <div class="card">
+          <div class="panel-title">Leave by Section <span class="hint">last 30 days</span></div>
+          <div id="chart-leave-zone"></div>
+        </div>
+        <div class="card">
+          <div class="panel-title">Missing Entries by Zone <span class="hint">last 30 days</span></div>
+          <div id="chart-missing-zone"></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <div class="panel-title">
+          Recent Leave Records
+          <button class="secondary" id="refresh-dashboard-btn">Refresh</button>
+        </div>
+        <div class="table-wrap"><table id="dashboard-recent-table"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- ===================== LEAVE REPORT VIEW ===================== -->
+    <section id="view-leave" class="view">
+      <form class="filters" id="leave-filters">
+        <div class="field">
+          <label for="leave-start">Start date</label>
+          <input type="date" id="leave-start">
+        </div>
+        <div class="field">
+          <label for="leave-end">End date</label>
+          <input type="date" id="leave-end">
+        </div>
+        <div class="field">
+          <label for="leave-zone">Zone</label>
+          <select id="leave-zone"><option value="">All zones</option></select>
+        </div>
+        <div class="field">
+          <label for="leave-employee">Employee (name or code)</label>
+          <input type="text" id="leave-employee" placeholder="e.g. Sharma or E1023">
+        </div>
+        <button type="submit" class="primary">Generate Report</button>
+        <button type="button" class="secondary" id="leave-clear-btn">Clear Filters</button>
+      </form>
+
+      <div class="status-line" id="leave-status"></div>
+      <div style="display:flex; gap:8px; margin-bottom:12px;">
+        <button type="button" class="secondary" id="leave-download-btn" disabled>Download CSV</button>
+        <button type="button" class="secondary" id="leave-copy-btn" disabled>Copy</button>
+      </div>
+      <div class="table-wrap"><table id="leave-table"><thead></thead><tbody></tbody></table></div>
+    </section>
+
+    <!-- ===================== MISSING ENTRIES VIEW ===================== -->
+    <section id="view-missing" class="view">
+      <form class="filters" id="missing-filters">
+        <div class="field">
+          <label for="missing-start">Start date</label>
+          <input type="date" id="missing-start">
+        </div>
+        <div class="field">
+          <label for="missing-end">End date</label>
+          <input type="date" id="missing-end">
+        </div>
+        <div class="field">
+          <label for="missing-zone">Zone</label>
+          <select id="missing-zone"><option value="">All zones</option></select>
+        </div>
+        <button type="submit" class="primary">Run Check</button>
+        <button type="button" class="secondary" id="missing-clear-btn">Clear Filters</button>
+      </form>
+
+      <div class="status-line" id="missing-status"></div>
+      <div style="display:flex; gap:8px; margin-bottom:12px;">
+        <button type="button" class="secondary" id="missing-download-btn" disabled>Download CSV</button>
+        <button type="button" class="secondary" id="missing-copy-btn" disabled>Copy</button>
+      </div>
+      <div class="table-wrap"><table id="missing-table"><thead></thead><tbody></tbody></table></div>
+    </section>
+
+    <!-- ===================== ALL ENTRIES VIEW ===================== -->
+    <section id="view-entries" class="view">
+      <form class="filters" id="entries-filters">
+        <div class="field">
+          <label for="entries-start">Start date</label>
+          <input type="date" id="entries-start">
+        </div>
+        <div class="field">
+          <label for="entries-end">End date</label>
+          <input type="date" id="entries-end">
+        </div>
+        <div class="field">
+          <label for="entries-zone">Section</label>
+          <select id="entries-zone"><option value="">All sections</option></select>
+        </div>
+        <button type="submit" class="primary">Load Entries</button>
+        <button type="button" class="secondary" id="entries-clear-btn">Clear Filters</button>
+      </form>
+
+      <div class="status-line" id="entries-status"></div>
+      <div style="display:flex; gap:8px; margin-bottom:12px;">
+        <button type="button" class="secondary" id="entries-download-btn" disabled>Download CSV</button>
+        <button type="button" class="secondary" id="entries-copy-btn" disabled>Copy</button>
+      </div>
+      <div class="table-wrap"><table id="entries-table"><thead></thead><tbody></tbody></table></div>
+    </section>
+
+    <!-- ===================== WORK SUMMARY VIEW ===================== -->
+    <section id="view-worksummary" class="view">
+      <form class="filters" id="worksummary-filters">
+        <div class="field">
+          <label for="worksummary-start">Start date</label>
+          <input type="date" id="worksummary-start">
+        </div>
+        <div class="field">
+          <label for="worksummary-end">End date</label>
+          <input type="date" id="worksummary-end">
+        </div>
+        <div class="field">
+          <label for="worksummary-zone">Section</label>
+          <select id="worksummary-zone"><option value="">All sections</option></select>
+        </div>
+        <button type="submit" class="primary">Load Summary</button>
+        <button type="button" class="secondary" id="worksummary-clear-btn">Clear Filters</button>
+      </form>
+
+      <div class="status-line" id="worksummary-status"></div>
+
+      <div class="card" style="margin-bottom:16px;">
+        <div class="panel-title">Status by Section</div>
+        <div id="chart-worksummary-status"></div>
+      </div>
+
+      <div style="display:flex; gap:8px; margin-bottom:12px;">
+        <button type="button" class="secondary" id="worksummary-download-btn" disabled>Download CSV</button>
+        <button type="button" class="secondary" id="worksummary-copy-btn" disabled>Copy</button>
+      </div>
+      <div class="table-wrap"><table id="worksummary-table"><thead></thead><tbody></tbody></table></div>
+    </section>
+
+    <!-- ===================== EMPLOYEES VIEW ===================== -->
+    <section id="view-employees" class="view">
+      <div class="card" style="margin-bottom:16px;">
+        <div class="panel-title">Admin Access</div>
+        <div class="field" style="max-width:280px;">
+          <label for="employee-admin-password">Admin password</label>
+          <input type="password" id="employee-admin-password" placeholder="Required to add or edit employees">
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px;">
+        <div class="panel-title" id="employee-form-title">Add Employee</div>
+        <form class="filters" id="employee-form" style="margin-bottom:0; align-items:flex-start;">
+          <div class="field">
+            <label for="emp-employeeCode">Employee Code <span style="color:var(--red);">*</span></label>
+            <input type="text" id="emp-employeeCode" required>
+          </div>
+          <div class="field">
+            <label for="emp-name">Name <span style="color:var(--red);">*</span></label>
+            <input type="text" id="emp-name" required>
+          </div>
+          <div class="field">
+            <label for="emp-designation">Designation</label>
+            <input type="text" id="emp-designation">
+          </div>
+          <div class="field">
+            <label for="emp-homeLocation">Home Location</label>
+            <input type="text" id="emp-homeLocation">
+          </div>
+          <div class="field">
+            <label for="emp-mobile">Mobile</label>
+            <input type="text" id="emp-mobile">
+          </div>
+          <div class="field">
+            <label for="emp-email">Email</label>
+            <input type="email" id="emp-email">
+          </div>
+          <div class="field">
+            <label for="emp-teamLeader">Team Leader / Section In-Charge</label>
+            <input type="text" id="emp-teamLeader">
+          </div>
+          <div class="field">
+            <label for="emp-sectionName">Section Name</label>
+            <input type="text" id="emp-sectionName">
+          </div>
+          <div class="field">
+            <label for="emp-zone">Zone</label>
+            <select id="emp-zone"><option value="">Select…</option></select>
+          </div>
+          <button type="submit" class="primary" id="employee-submit-btn">Add Employee</button>
+          <button type="button" class="secondary" id="employee-cancel-edit-btn" style="display:none;">Cancel Edit</button>
+        </form>
+        <div class="status-line" id="employee-form-status"></div>
+      </div>
+
+      <div class="card">
+        <div class="panel-title">
+          All Employees
+          <span class="hint">Click a row's Edit button to modify it — the form above switches into edit mode.</span>
+        </div>
+        <form class="filters" id="employee-filters" style="margin-bottom:12px;" onsubmit="return false;">
+          <div class="field">
+            <label for="employee-filter-zone">Zone</label>
+            <select id="employee-filter-zone"><option value="">All zones</option></select>
+          </div>
+          <div class="field" style="flex:1; min-width:220px;">
+            <label for="employee-search">Search (name or employee code)</label>
+            <input type="text" id="employee-search" placeholder="e.g. Sharma or 901924">
+          </div>
+          <button type="button" class="secondary" id="employee-filter-clear-btn">Clear</button>
+        </form>
+        <div class="status-line" id="employee-list-status"></div>
+        <div class="table-wrap"><table id="employee-list-table"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- ===================== ZONE REGISTRATION VIEW ===================== -->
+    <section id="view-zones" class="view">
+      <div class="card" style="margin-bottom:16px;">
+        <div class="panel-title">Admin Access</div>
+        <div class="field" style="max-width:280px;">
+          <label for="zone-admin-password">Admin password</label>
+          <input type="password" id="zone-admin-password" placeholder="Required to add, rename or remove zones">
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px;">
+        <div class="panel-title">Register New Zone</div>
+        <form class="filters" id="zone-add-form" style="margin-bottom:0;">
+          <div class="field">
+            <label for="zone-add-name">Zone name</label>
+            <input type="text" id="zone-add-name" placeholder="e.g. WR III" required>
+          </div>
+          <button type="submit" class="primary">Register Zone</button>
+        </form>
+        <div class="status-line" id="zone-add-status"></div>
+      </div>
+
+      <div class="card">
+        <div class="panel-title">
+          Existing Zones
+          <span class="hint">Zones referenced by existing entries can't be removed (the database blocks it) until those entries are reassigned.</span>
+        </div>
+        <div class="status-line" id="zone-list-status"></div>
+        <div class="table-wrap"><table id="zone-list-table"><thead></thead><tbody></tbody></table></div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <div class="panel-title">
+          Data Retention
+          <span class="hint">Rolling 3-month window: the current month plus the two before it are kept.</span>
+        </div>
+        <p style="font-size:13px; color:var(--muted); margin:0 0 12px;">
+          Entries older than <strong id="retention-cutoff-date">—</strong> are eligible for deletion.
+          Automatic monthly cleanup only runs if <code>pg_cron</code> is enabled on your Supabase
+          project (Database → Extensions) — otherwise use the button below manually.
+        </p>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <button type="button" class="secondary" id="retention-preview-btn">Preview</button>
+          <button type="button" class="primary" id="retention-purge-btn" style="background:var(--red);" disabled>Purge Now</button>
+        </div>
+        <div class="status-line" id="retention-status" style="margin-top:8px;"></div>
+      </div>
+    </section>
+
+    <!-- ===================== ADMIN LOGIN VIEW ===================== -->
+    <section id="view-adminlogin" class="view">
+      <div class="card" style="margin-bottom:16px; max-width:420px;">
+        <div class="panel-title">Admin Login</div>
+        <p style="font-size:13px; color:var(--muted); margin:0 0 12px;">
+          Separate from the shared Zones/Employees admin password above — only
+          specific authorized accounts can sign in here, and only to change that
+          shared password.
+        </p>
+
+        <div id="adminlogin-signed-out">
+          <div class="field">
+            <label for="adminlogin-email">Email</label>
+            <input type="email" id="adminlogin-email">
+          </div>
+          <div class="field">
+            <label for="adminlogin-password">Password</label>
+            <input type="password" id="adminlogin-password">
+          </div>
+          <button type="button" class="primary" id="adminlogin-signin-btn">Sign In</button>
+          <div class="status-line" id="adminlogin-status"></div>
+        </div>
+
+        <div id="adminlogin-signed-in" style="display:none;">
+          <p style="font-size:13px;">Signed in as <strong id="adminlogin-current-email"></strong></p>
+          <button type="button" class="secondary" id="adminlogin-signout-btn">Sign Out</button>
+
+          <div id="adminlogin-not-authorized" style="display:none; margin-top:16px;">
+            <p style="font-size:13px; color:var(--red);">This account is not authorized to change the admin password.</p>
+          </div>
+
+          <div id="adminlogin-change-password" style="display:none; margin-top:16px; border-top:1px solid var(--border); padding-top:16px;">
+            <div class="panel-title" style="margin-bottom:8px;">Change Admin Password</div>
+            <div class="field">
+              <label for="adminlogin-new-password">New admin password</label>
+              <input type="password" id="adminlogin-new-password">
+            </div>
+            <div class="field">
+              <label for="adminlogin-confirm-password">Confirm new password</label>
+              <input type="password" id="adminlogin-confirm-password">
+            </div>
+            <button type="button" class="primary" id="adminlogin-change-btn">Change Password</button>
+            <div class="status-line" id="adminlogin-change-status"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js"></script>
+  <script src="supabase-client.js"></script>
+  <script>
+    var sb = window.supabaseClient;
+
+    /* ---------- tab navigation ---------- */
+    document.querySelectorAll('.tab-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
+        document.querySelectorAll('.view').forEach(function (v) { v.classList.remove('active'); });
+        btn.classList.add('active');
+        document.getElementById('view-' + btn.dataset.view).classList.add('active');
+        if (btn.dataset.view === 'dashboard') {
+          loadDashboard();
+        } else if (btn.dataset.view === 'zones') {
+          loadZoneList();
+        } else if (btn.dataset.view === 'employees') {
+          loadEmployees();
+        } else if (btn.dataset.view === 'adminlogin') {
+          refreshAdminLoginUi();
+        }
+      });
+    });
+
+    /* ---------- clock ---------- */
+    function tickClock() {
+      document.getElementById('clock').textContent = new Date().toLocaleString();
+    }
+    tickClock();
+    setInterval(tickClock, 30000);
+
+    /* ---------- date helpers ---------- */
+    function isoDate(d) {
+      var mm = ('0' + (d.getMonth() + 1)).slice(-2);
+      var dd = ('0' + d.getDate()).slice(-2);
+      return d.getFullYear() + '-' + mm + '-' + dd;
+    }
+    function todayIso() { return isoDate(new Date()); }
+    function daysAgoIso(n) {
+      var d = new Date();
+      d.setDate(d.getDate() - n);
+      return isoDate(d);
+    }
+
+    /* ---------- generic helpers ---------- */
+    function setStatus(elId, text, kind) {
+      var el = document.getElementById(elId);
+      el.textContent = text || '';
+      el.className = 'status-line' + (kind ? ' ' + kind : '');
+    }
+
+    // Zone/section columns always render as a dark badge, like the zone pill in
+    // the reference UI. Used as a columnRenderers entry in renderTable calls below.
+    function zoneBadge() { return 'badge-zone'; }
+
+    // Assigned Works Status: color-code by value (Done / Work in Progress / anything else).
+    function workStatusBadge(value) {
+      var v = (value || '').toString().toLowerCase();
+      if (v === 'done') return 'badge-done';
+      if (v.indexOf('progress') !== -1) return 'badge-progress';
+      return 'badge-neutral';
+    }
+
+    function missingStatusBadge() { return 'badge-progress'; }
+
+    function renderTable(tableId, headers, rows, columnRenderers) {
+      var table = document.getElementById(tableId);
+      var thead = table.querySelector('thead');
+      var tbody = table.querySelector('tbody');
+      thead.innerHTML = '';
+      tbody.innerHTML = '';
+
+      if (!rows || rows.length === 0) {
+        tbody.innerHTML = '<tr><td class="empty-state">No matching records found.</td></tr>';
+        return;
+      }
+
+      var trh = document.createElement('tr');
+      headers.forEach(function (h) {
+        var th = document.createElement('th');
+        th.textContent = h;
+        trh.appendChild(th);
+      });
+      thead.appendChild(trh);
+
+      rows.forEach(function (row) {
+        var tr = document.createElement('tr');
+        row.forEach(function (cell, idx) {
+          var td = document.createElement('td');
+          var text = cell === null || cell === undefined ? '' : cell;
+          var badgeFn = columnRenderers && columnRenderers[idx];
+          if (badgeFn && text !== '') {
+            var span = document.createElement('span');
+            span.className = 'badge ' + badgeFn(text);
+            span.textContent = text;
+            td.appendChild(span);
+          } else {
+            td.textContent = text;
+          }
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderBarChart(containerId, dataObj, colorClass) {
+      var container = document.getElementById(containerId);
+      container.innerHTML = '';
+      var entries = Object.keys(dataObj || {}).map(function (k) { return [k, dataObj[k]]; });
+      if (entries.length === 0) {
+        container.innerHTML = '<div class="empty-state">No data in this window.</div>';
+        return;
+      }
+      entries.sort(function (a, b) { return b[1] - a[1]; });
+      var max = entries[0][1];
+      entries.forEach(function (entry) {
+        var row = document.createElement('div');
+        row.className = 'bar-row';
+        var pct = max > 0 ? Math.max(4, Math.round((entry[1] / max) * 100)) : 0;
+        row.innerHTML =
+          '<div class="bar-label" title="' + entry[0] + '">' + entry[0] + '</div>' +
+          '<div class="bar-track"><div class="bar-fill ' + (colorClass || '') + '" style="width:' + pct + '%"></div></div>' +
+          '<div class="bar-value">' + entry[1] + '</div>';
+        container.appendChild(row);
+      });
+    }
+
+    function countBy(rows, key) {
+      var counts = {};
+      rows.forEach(function (r) {
+        var v = r[key] || 'Unspecified';
+        counts[v] = (counts[v] || 0) + 1;
+      });
+      return counts;
+    }
+
+    function leaveRowsToTable(rows) {
+      var headers = ['Date', 'Employee Code', 'Employee Name', 'Mobile', 'Section', 'Leave From', 'Leave To', 'Team Leader', 'Remarks'];
+      var data = rows.map(function (r) {
+        return [r.entry_date, r.employee_code, r.employee_name, r.mobile, r.current_working_section, r.leave_from, r.leave_to, r.team_leader, r.remarks];
+      });
+      return { headers: headers, rows: data };
+    }
+
+    function missingRowsToTable(rows) {
+      var headers = ['Date', 'Employee Code', 'Employee Name', 'Zone', 'Status'];
+      var data = rows.map(function (r) {
+        return [r.entry_date, r.employee_code, r.employee_name, r.zone, 'Missing Entry'];
+      });
+      return { headers: headers, rows: data };
+    }
+
+    function entriesRowsToTable(rows) {
+      var headers = ['Date', 'Section', 'Employee Code', 'Employee Name', 'Designation', 'Mobile', 'Team Leader', 'Check-In', 'Check-Out', 'Works Assigned Station', 'Works Assigned', 'Status', 'Remarks'];
+      var data = rows.map(function (r) {
+        return [r.entry_date, r.current_working_section, r.employee_code, r.employee_name, r.designation, r.mobile, r.team_leader, r.check_in_time, r.check_out_time, r.works_assigned_station, r.works_assigned, r.assigned_works_status, r.remarks];
+      });
+      return { headers: headers, rows: data };
+    }
+
+    function workSummaryRowsToTable(rows) {
+      var filtered = rows.filter(function (r) {
+        return r.works_assigned_station || r.works_assigned || r.assigned_works_status;
+      });
+      var headers = ['Date', 'Section', 'Employee Code', 'Employee Name', 'Works Assigned Station', 'Works Assigned', 'Status'];
+      var data = filtered.map(function (r) {
+        return [r.entry_date, r.current_working_section, r.employee_code, r.employee_name, r.works_assigned_station, r.works_assigned, r.assigned_works_status];
+      });
+      return { headers: headers, rows: data, raw: filtered };
+    }
+
+    function populateZoneSelect(selectEl, zones) {
+      zones.forEach(function (z) {
+        var opt = document.createElement('option');
+        opt.value = z;
+        opt.textContent = z;
+        selectEl.appendChild(opt);
+      });
+    }
+
+    function refreshZoneDropdowns(zones) {
+      [
+        { id: 'leave-zone', placeholder: 'All zones' },
+        { id: 'missing-zone', placeholder: 'All zones' },
+        { id: 'entries-zone', placeholder: 'All sections' },
+        { id: 'worksummary-zone', placeholder: 'All sections' },
+        { id: 'employee-filter-zone', placeholder: 'All zones' }
+      ].forEach(function (cfg) {
+        var select = document.getElementById(cfg.id);
+        var current = select.value;
+        select.innerHTML = '<option value="">' + cfg.placeholder + '</option>';
+        populateZoneSelect(select, zones);
+        if (zones.indexOf(current) !== -1) select.value = current;
+      });
+
+      var empSelect = document.getElementById('emp-zone');
+      var empCurrent = empSelect.value;
+      empSelect.innerHTML = '<option value="">Select…</option>';
+      populateZoneSelect(empSelect, zones);
+      if (zones.indexOf(empCurrent) !== -1) empSelect.value = empCurrent;
+    }
+
+    /* ---------- init: load zone list into filter dropdowns ---------- */
+    async function loadFilterOptions() {
+      var { data, error } = await sb.from('zones').select('name').order('name');
+      if (error) {
+        console.error(error);
+        return;
+      }
+      var zones = data.map(function (r) { return r.name; });
+      populateZoneSelect(document.getElementById('leave-zone'), zones);
+      populateZoneSelect(document.getElementById('missing-zone'), zones);
+      populateZoneSelect(document.getElementById('entries-zone'), zones);
+      populateZoneSelect(document.getElementById('worksummary-zone'), zones);
+      populateZoneSelect(document.getElementById('emp-zone'), zones);
+      populateZoneSelect(document.getElementById('employee-filter-zone'), zones);
+      return zones;
+    }
+    loadFilterOptions();
+
+    document.getElementById('missing-start').value = daysAgoIso(30);
+    document.getElementById('missing-end').value = todayIso();
+    document.getElementById('entries-start').value = daysAgoIso(7);
+    document.getElementById('entries-end').value = todayIso();
+    document.getElementById('worksummary-start').value = daysAgoIso(7);
+    document.getElementById('worksummary-end').value = todayIso();
+
+    /* ---------- dashboard ---------- */
+    async function loadDashboard() {
+      setStatus('dashboard-status', 'Loading dashboard…', 'loading');
+
+      var start = daysAgoIso(30);
+      var end = todayIso();
+
+      var [empRes, leaveRes, missingRes, unmatchedRes] = await Promise.all([
+        sb.from('employees').select('*', { count: 'exact', head: true }),
+        sb.rpc('get_leave_report', { p_start: start, p_end: end, p_zone: null, p_query: null }),
+        sb.rpc('get_missing_entries', { p_start: start, p_end: end, p_zone: null }),
+        sb.rpc('get_unmatched_entries', { p_limit: 200 })
+      ]);
+
+      var firstError = empRes.error || leaveRes.error || missingRes.error || unmatchedRes.error;
+      if (firstError) {
+        setStatus('dashboard-status', 'Error: ' + firstError.message, 'error');
+        return;
+      }
+      setStatus('dashboard-status', '', '');
+
+      var leaveRows = leaveRes.data || [];
+      var missingRows = missingRes.data || [];
+
+      var tiles = document.querySelectorAll('#dashboard-tiles .stat-tile .value');
+      tiles[0].textContent = empRes.count || 0;
+      tiles[1].textContent = leaveRows.length;
+      tiles[2].textContent = missingRows.length;
+      var unmatchedCount = (unmatchedRes.data || []).length;
+      tiles[3].textContent = unmatchedCount;
+      var unmatchedTile = document.querySelectorAll('#dashboard-tiles .stat-tile')[3];
+      unmatchedTile.classList.toggle('tone-green', unmatchedCount === 0);
+      unmatchedTile.classList.toggle('tone-red', unmatchedCount > 0);
+
+      renderBarChart('chart-leave-zone', countBy(leaveRows, 'current_working_section'), '');
+      renderBarChart('chart-missing-zone', countBy(missingRows, 'zone'), 'amber');
+
+      var table = leaveRowsToTable(leaveRows.slice(0, 10));
+      renderTable('dashboard-recent-table', table.headers, table.rows, { 4: zoneBadge });
+    }
+    document.getElementById('refresh-dashboard-btn').addEventListener('click', loadDashboard);
+    loadDashboard();
+
+    /* ---------- export helpers (CSV download + copy) ---------- */
+    var lastLeaveResult = null;
+    var lastMissingResult = null;
+    var lastEntriesResult = null;
+    var lastWorkSummaryResult = null;
+
+    function csvEscape(cell) {
+      var text = cell === null || cell === undefined ? '' : String(cell);
+      if (/[",\n]/.test(text)) {
+        text = '"' + text.replace(/"/g, '""') + '"';
+      }
+      return text;
+    }
+    function toCsv(headers, rows) {
+      var lines = [headers.map(csvEscape).join(',')];
+      rows.forEach(function (row) { lines.push(row.map(csvEscape).join(',')); });
+      return lines.join('\r\n');
+    }
+    function toTsv(headers, rows) {
+      function clean(cell) {
+        return (cell === null || cell === undefined ? '' : String(cell)).replace(/\t/g, ' ').replace(/\r?\n/g, ' ');
+      }
+      var lines = [headers.map(clean).join('\t')];
+      rows.forEach(function (row) { lines.push(row.map(clean).join('\t')); });
+      return lines.join('\r\n');
+    }
+    function copyText(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text);
+      }
+      return new Promise(function (resolve, reject) {
+        var textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        var ok = false;
+        try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+        document.body.removeChild(textarea);
+        ok ? resolve() : reject(new Error('Copy command failed'));
+      });
+    }
+
+    function wireExportButtons_(idPrefix, filenameBase, getResult) {
+      document.getElementById(idPrefix + '-download-btn').addEventListener('click', function () {
+        var result = getResult();
+        if (!result || result.rows.length === 0) return;
+        var csv = toCsv(result.headers, result.rows);
+        var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = filenameBase + '_' + todayIso() + '.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+
+      document.getElementById(idPrefix + '-copy-btn').addEventListener('click', function () {
+        var result = getResult();
+        if (!result || result.rows.length === 0) return;
+        var btn = document.getElementById(idPrefix + '-copy-btn');
+        copyText(toTsv(result.headers, result.rows))
+          .then(function () {
+            var original = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(function () { btn.textContent = original; }, 1500);
+          })
+          .catch(function () {
+            setStatus(idPrefix + '-status', 'Could not copy to clipboard — your browser may be blocking it.', 'error');
+          });
+      });
+    }
+    wireExportButtons_('leave', 'Leave_Report', function () { return lastLeaveResult; });
+    wireExportButtons_('missing', 'Missing_Entries', function () { return lastMissingResult; });
+    wireExportButtons_('entries', 'All_Entries', function () { return lastEntriesResult; });
+    wireExportButtons_('worksummary', 'Work_Summary', function () { return lastWorkSummaryResult; });
+
+    /* ---------- leave report ---------- */
+    document.getElementById('leave-filters').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var btn = e.target.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      setStatus('leave-status', 'Generating report…', 'loading');
+
+      var { data, error } = await sb.rpc('get_leave_report', {
+        p_start: document.getElementById('leave-start').value || null,
+        p_end: document.getElementById('leave-end').value || null,
+        p_zone: document.getElementById('leave-zone').value || null,
+        p_query: document.getElementById('leave-employee').value || null
+      });
+
+      btn.disabled = false;
+
+      if (error) {
+        setStatus('leave-status', 'Error: ' + error.message, 'error');
+        return;
+      }
+
+      var table = leaveRowsToTable(data);
+      setStatus('leave-status', data.length + ' record(s) found.', 'success');
+      renderTable('leave-table', table.headers, table.rows, { 4: zoneBadge });
+      lastLeaveResult = table;
+      document.getElementById('leave-download-btn').disabled = table.rows.length === 0;
+      document.getElementById('leave-copy-btn').disabled = table.rows.length === 0;
+    });
+
+    document.getElementById('leave-clear-btn').addEventListener('click', function () {
+      document.getElementById('leave-filters').reset();
+    });
+
+    /* ---------- missing entries ---------- */
+    document.getElementById('missing-filters').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var btn = e.target.querySelector('button[type="submit"]');
+      var start = document.getElementById('missing-start').value;
+      var end = document.getElementById('missing-end').value;
+      if (!start || !end) {
+        setStatus('missing-status', 'Start and end date are both required.', 'error');
+        return;
+      }
+
+      btn.disabled = true;
+      setStatus('missing-status', 'Checking attendance…', 'loading');
+
+      var { data, error } = await sb.rpc('get_missing_entries', {
+        p_start: start,
+        p_end: end,
+        p_zone: document.getElementById('missing-zone').value || null
+      });
+
+      btn.disabled = false;
+
+      if (error) {
+        setStatus('missing-status', 'Error: ' + error.message, 'error');
+        return;
+      }
+
+      var table = missingRowsToTable(data);
+      setStatus('missing-status', data.length + ' missing record(s) found.', 'success');
+      renderTable('missing-table', table.headers, table.rows, { 3: zoneBadge, 4: missingStatusBadge });
+      lastMissingResult = table;
+      document.getElementById('missing-download-btn').disabled = table.rows.length === 0;
+      document.getElementById('missing-copy-btn').disabled = table.rows.length === 0;
+    });
+
+    document.getElementById('missing-clear-btn').addEventListener('click', function () {
+      document.getElementById('missing-filters').reset();
+      document.getElementById('missing-start').value = daysAgoIso(30);
+      document.getElementById('missing-end').value = todayIso();
+    });
+
+    /* ---------- all entries (by section) ---------- */
+    document.getElementById('entries-filters').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var btn = e.target.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      setStatus('entries-status', 'Loading entries…', 'loading');
+
+      var { data, error } = await sb.rpc('get_entries', {
+        p_start: document.getElementById('entries-start').value || null,
+        p_end: document.getElementById('entries-end').value || null,
+        p_zone: document.getElementById('entries-zone').value || null
+      });
+
+      btn.disabled = false;
+
+      if (error) {
+        setStatus('entries-status', 'Error: ' + error.message, 'error');
+        return;
+      }
+
+      var table = entriesRowsToTable(data);
+      setStatus('entries-status', data.length + ' entr' + (data.length === 1 ? 'y' : 'ies') + ' found.', 'success');
+      renderTable('entries-table', table.headers, table.rows, { 1: zoneBadge, 11: workStatusBadge });
+      lastEntriesResult = table;
+      document.getElementById('entries-download-btn').disabled = table.rows.length === 0;
+      document.getElementById('entries-copy-btn').disabled = table.rows.length === 0;
+    });
+
+    document.getElementById('entries-clear-btn').addEventListener('click', function () {
+      document.getElementById('entries-filters').reset();
+      document.getElementById('entries-start').value = daysAgoIso(7);
+      document.getElementById('entries-end').value = todayIso();
+    });
+
+    /* ---------- work summary ---------- */
+    function statusBySectionCounts(rows) {
+      var counts = {};
+      rows.forEach(function (r) {
+        var section = r.current_working_section || 'Unspecified';
+        var status = r.assigned_works_status || 'Not set';
+        var key = section + ' — ' + status;
+        counts[key] = (counts[key] || 0) + 1;
+      });
+      return counts;
+    }
+
+    document.getElementById('worksummary-filters').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var btn = e.target.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      setStatus('worksummary-status', 'Loading…', 'loading');
+
+      var { data, error } = await sb.rpc('get_entries', {
+        p_start: document.getElementById('worksummary-start').value || null,
+        p_end: document.getElementById('worksummary-end').value || null,
+        p_zone: document.getElementById('worksummary-zone').value || null
+      });
+
+      btn.disabled = false;
+
+      if (error) {
+        setStatus('worksummary-status', 'Error: ' + error.message, 'error');
+        return;
+      }
+
+      var table = workSummaryRowsToTable(data);
+      setStatus('worksummary-status', table.rows.length + ' work record(s) found.', 'success');
+      renderTable('worksummary-table', table.headers, table.rows, { 1: zoneBadge, 6: workStatusBadge });
+      renderBarChart('chart-worksummary-status', statusBySectionCounts(table.raw), '');
+      lastWorkSummaryResult = table;
+      document.getElementById('worksummary-download-btn').disabled = table.rows.length === 0;
+      document.getElementById('worksummary-copy-btn').disabled = table.rows.length === 0;
+    });
+
+    document.getElementById('worksummary-clear-btn').addEventListener('click', function () {
+      document.getElementById('worksummary-filters').reset();
+      document.getElementById('worksummary-start').value = daysAgoIso(7);
+      document.getElementById('worksummary-end').value = todayIso();
+    });
+
+    /* ---------- employees ---------- */
+    var editingEmployeeCode = null;
+
+    var allEmployees = [];
+
+    async function loadEmployees() {
+      setStatus('employee-list-status', 'Loading…', 'loading');
+      var { data, error } = await sb.from('employees').select('*').order('name');
+      if (error) {
+        setStatus('employee-list-status', 'Error: ' + error.message, 'error');
+        return;
+      }
+      setStatus('employee-list-status', '', '');
+      allEmployees = data;
+      applyEmployeeFilters();
+    }
+
+    function applyEmployeeFilters() {
+      var zone = document.getElementById('employee-filter-zone').value;
+      var query = document.getElementById('employee-search').value.trim().toLowerCase();
+
+      var filtered = allEmployees.filter(function (emp) {
+        if (zone && emp.zone !== zone) return false;
+        if (query) {
+          var name = (emp.name || '').toLowerCase();
+          var code = (emp.employee_code || '').toLowerCase();
+          if (name.indexOf(query) === -1 && code.indexOf(query) === -1) return false;
+        }
+        return true;
+      });
+
+      renderEmployeeTable(filtered);
+    }
+
+    document.getElementById('employee-filter-zone').addEventListener('change', applyEmployeeFilters);
+    document.getElementById('employee-search').addEventListener('input', applyEmployeeFilters);
+    document.getElementById('employee-filter-clear-btn').addEventListener('click', function () {
+      document.getElementById('employee-filter-zone').value = '';
+      document.getElementById('employee-search').value = '';
+      applyEmployeeFilters();
+    });
+
+    function renderEmployeeTable(employees) {
+      var table = document.getElementById('employee-list-table');
+      var thead = table.querySelector('thead');
+      var tbody = table.querySelector('tbody');
+      var headers = ['Employee Code', 'Name', 'Designation', 'Home Location', 'Mobile', 'Team Leader', 'Section Name', 'Zone', 'Actions'];
+      thead.innerHTML = '<tr>' + headers.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr>';
+      tbody.innerHTML = '';
+
+      if (!employees || employees.length === 0) {
+        tbody.innerHTML = '<tr><td class="empty-state" colspan="' + headers.length + '">No employees yet.</td></tr>';
+        return;
+      }
+
+      employees.forEach(function (emp) {
+        var tr = document.createElement('tr');
+        [emp.employee_code, emp.name, emp.designation, emp.home_location, emp.mobile, emp.team_leader, emp.section_name, emp.zone].forEach(function (val, idx) {
+          var td = document.createElement('td');
+          var text = val === null || val === undefined ? '' : val;
+          if (idx === 7 && text !== '') {
+            var span = document.createElement('span');
+            span.className = 'badge badge-zone';
+            span.textContent = text;
+            td.appendChild(span);
+          } else {
+            td.textContent = text;
+          }
+          tr.appendChild(td);
+        });
+
+        var actionsTd = document.createElement('td');
+        var editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'secondary';
+        editBtn.textContent = 'Edit';
+        editBtn.addEventListener('click', function () { startEditEmployee(emp); });
+        actionsTd.appendChild(editBtn);
+        tr.appendChild(actionsTd);
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    function startEditEmployee(emp) {
+      editingEmployeeCode = emp.employee_code;
+      document.getElementById('emp-employeeCode').value = emp.employee_code || '';
+      document.getElementById('emp-employeeCode').disabled = true;
+      document.getElementById('emp-name').value = emp.name || '';
+      document.getElementById('emp-designation').value = emp.designation || '';
+      document.getElementById('emp-homeLocation').value = emp.home_location || '';
+      document.getElementById('emp-mobile').value = emp.mobile || '';
+      document.getElementById('emp-email').value = emp.email || '';
+      document.getElementById('emp-teamLeader').value = emp.team_leader || '';
+      document.getElementById('emp-sectionName').value = emp.section_name || '';
+      document.getElementById('emp-zone').value = emp.zone || '';
+
+      document.getElementById('employee-form-title').textContent = 'Edit Employee: ' + emp.employee_code;
+      document.getElementById('employee-submit-btn').textContent = 'Save Changes';
+      document.getElementById('employee-cancel-edit-btn').style.display = '';
+      window.scrollTo({ top: document.getElementById('view-employees').offsetTop, behavior: 'smooth' });
+    }
+
+    function resetEmployeeForm() {
+      editingEmployeeCode = null;
+      document.getElementById('employee-form').reset();
+      document.getElementById('emp-employeeCode').disabled = false;
+      document.getElementById('employee-form-title').textContent = 'Add Employee';
+      document.getElementById('employee-submit-btn').textContent = 'Add Employee';
+      document.getElementById('employee-cancel-edit-btn').style.display = 'none';
+    }
+    document.getElementById('employee-cancel-edit-btn').addEventListener('click', resetEmployeeForm);
+
+    document.getElementById('employee-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var password = document.getElementById('employee-admin-password').value;
+      if (!password) { setStatus('employee-form-status', 'Enter the admin password above first.', 'error'); return; }
+
+      var code = editingEmployeeCode || document.getElementById('emp-employeeCode').value.trim();
+      var name = document.getElementById('emp-name').value.trim();
+      if (!code || !name) {
+        setStatus('employee-form-status', 'Employee Code and Name are required.', 'error');
+        return;
+      }
+
+      var btn = document.getElementById('employee-submit-btn');
+      btn.disabled = true;
+      setStatus('employee-form-status', 'Saving…', 'loading');
+
+      var { error } = await sb.rpc('admin_upsert_employee', {
+        p_password: password,
+        p_employee_code: code,
+        p_name: name,
+        p_designation: document.getElementById('emp-designation').value || null,
+        p_home_location: document.getElementById('emp-homeLocation').value || null,
+        p_mobile: document.getElementById('emp-mobile').value || null,
+        p_email: document.getElementById('emp-email').value || null,
+        p_team_leader: document.getElementById('emp-teamLeader').value || null,
+        p_section_name: document.getElementById('emp-sectionName').value || null,
+        p_zone: document.getElementById('emp-zone').value || null
+      });
+
+      btn.disabled = false;
+
+      if (error) {
+        setStatus('employee-form-status', 'Error: ' + error.message, 'error');
+        return;
+      }
+
+      setStatus('employee-form-status', (editingEmployeeCode ? 'Employee updated.' : 'Employee added.'), 'success');
+      resetEmployeeForm();
+      loadEmployees();
+    });
+
+    /* ---------- zone registration ---------- */
+    async function loadZoneList() {
+      setStatus('zone-list-status', 'Loading…', 'loading');
+      var { data, error } = await sb.from('zones').select('name').order('name');
+      if (error) {
+        setStatus('zone-list-status', 'Error: ' + error.message, 'error');
+        return;
+      }
+      setStatus('zone-list-status', '', '');
+      renderZoneTable(data.map(function (r) { return r.name; }));
+    }
+
+    function renderZoneTable(zones) {
+      var table = document.getElementById('zone-list-table');
+      var thead = table.querySelector('thead');
+      var tbody = table.querySelector('tbody');
+      thead.innerHTML = '<tr><th>Zone Name</th><th>Actions</th></tr>';
+      tbody.innerHTML = '';
+
+      if (!zones || zones.length === 0) {
+        tbody.innerHTML = '<tr><td class="empty-state" colspan="2">No zones registered yet.</td></tr>';
+        return;
+      }
+
+      zones.forEach(function (zone) {
+        var tr = document.createElement('tr');
+
+        var nameTd = document.createElement('td');
+        var nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.value = zone;
+        nameInput.style.cssText = 'border:1px solid var(--border); border-radius:4px; padding:4px 6px; font-size:13px; width:140px;';
+        nameTd.appendChild(nameInput);
+
+        var actionsTd = document.createElement('td');
+
+        var renameBtn = document.createElement('button');
+        renameBtn.type = 'button';
+        renameBtn.className = 'secondary';
+        renameBtn.textContent = 'Rename';
+        renameBtn.style.marginRight = '6px';
+        renameBtn.addEventListener('click', async function () {
+          var password = document.getElementById('zone-admin-password').value;
+          if (!password) { setStatus('zone-list-status', 'Enter the admin password above first.', 'error'); return; }
+          var newName = nameInput.value.trim();
+          if (!newName || newName === zone) return;
+          setStatus('zone-list-status', 'Renaming…', 'loading');
+          var { error } = await sb.rpc('admin_rename_zone', { p_password: password, p_old_name: zone, p_new_name: newName });
+          if (error) {
+            setStatus('zone-list-status', 'Error: ' + error.message, 'error');
+            return;
+          }
+          setStatus('zone-list-status', 'Zone renamed.', 'success');
+          loadZoneList();
+          loadFilterOptions().then(refreshZoneDropdowns);
+        });
+
+        var removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'secondary';
+        removeBtn.textContent = 'Remove';
+        removeBtn.addEventListener('click', async function () {
+          var password = document.getElementById('zone-admin-password').value;
+          if (!password) { setStatus('zone-list-status', 'Enter the admin password above first.', 'error'); return; }
+          if (!confirm('Remove zone "' + zone + '"? Entries already using this zone will block the removal.')) return;
+          setStatus('zone-list-status', 'Removing…', 'loading');
+          var { error } = await sb.rpc('admin_remove_zone', { p_password: password, p_zone: zone });
+          if (error) {
+            setStatus('zone-list-status', 'Error: ' + error.message, 'error');
+            return;
+          }
+          setStatus('zone-list-status', 'Zone removed.', 'success');
+          loadZoneList();
+          loadFilterOptions().then(refreshZoneDropdowns);
+        });
+
+        actionsTd.appendChild(renameBtn);
+        actionsTd.appendChild(removeBtn);
+        tr.appendChild(nameTd);
+        tr.appendChild(actionsTd);
+        tbody.appendChild(tr);
+      });
+    }
+
+    document.getElementById('zone-add-form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var password = document.getElementById('zone-admin-password').value;
+      if (!password) { setStatus('zone-add-status', 'Enter the admin password above first.', 'error'); return; }
+      var name = document.getElementById('zone-add-name').value.trim();
+      if (!name) return;
+
+      var btn = e.target.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      setStatus('zone-add-status', 'Registering…', 'loading');
+
+      var { error } = await sb.rpc('admin_add_zone', { p_password: password, p_zone: name });
+
+      btn.disabled = false;
+
+      if (error) {
+        setStatus('zone-add-status', 'Error: ' + error.message, 'error');
+        return;
+      }
+
+      setStatus('zone-add-status', 'Zone registered.', 'success');
+      document.getElementById('zone-add-name').value = '';
+      loadZoneList();
+      loadFilterOptions().then(refreshZoneDropdowns);
+    });
+
+    /* ---------- data retention ---------- */
+    (function () {
+      var cutoff = new Date();
+      cutoff.setDate(1);
+      cutoff.setMonth(cutoff.getMonth() - 2);
+      document.getElementById('retention-cutoff-date').textContent =
+        cutoff.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    })();
+
+    document.getElementById('retention-preview-btn').addEventListener('click', async function () {
+      var btn = this;
+      btn.disabled = true;
+      setStatus('retention-status', 'Checking…', 'loading');
+
+      var { data, error } = await sb.rpc('preview_purge_old_entries');
+
+      btn.disabled = false;
+
+      if (error) {
+        setStatus('retention-status', 'Error: ' + error.message, 'error');
+        return;
+      }
+
+      var purgeBtn = document.getElementById('retention-purge-btn');
+      if (data > 0) {
+        setStatus('retention-status', data + ' entr' + (data === 1 ? 'y' : 'ies') + ' older than the retention window — ready to purge.', 'success');
+        purgeBtn.disabled = false;
+      } else {
+        setStatus('retention-status', 'Nothing to purge — no entries outside the retention window.', 'success');
+        purgeBtn.disabled = true;
+      }
+    });
+
+    document.getElementById('retention-purge-btn').addEventListener('click', async function () {
+      var password = document.getElementById('zone-admin-password').value;
+      if (!password) { setStatus('retention-status', 'Enter the admin password above first.', 'error'); return; }
+      if (!confirm('Permanently delete all entries older than the 3-month retention window? This cannot be undone.')) return;
+
+      var btn = this;
+      btn.disabled = true;
+      setStatus('retention-status', 'Purging…', 'loading');
+
+      var { data, error } = await sb.rpc('admin_purge_old_entries', { p_password: password });
+
+      if (error) {
+        btn.disabled = false;
+        setStatus('retention-status', 'Error: ' + error.message, 'error');
+        return;
+      }
+
+      setStatus('retention-status', 'Purged ' + data + ' entr' + (data === 1 ? 'y' : 'ies') + '.', 'success');
+    });
+
+    /* ---------- admin login (restricted — separate from the shared admin password) ---------- */
+    async function refreshAdminLoginUi() {
+      var { data: { session } } = await sb.auth.getSession();
+
+      if (!session) {
+        document.getElementById('adminlogin-signed-out').style.display = '';
+        document.getElementById('adminlogin-signed-in').style.display = 'none';
+        return;
+      }
+
+      document.getElementById('adminlogin-signed-out').style.display = 'none';
+      document.getElementById('adminlogin-signed-in').style.display = '';
+      document.getElementById('adminlogin-current-email').textContent = session.user.email;
+
+      var { data: authorized, error } = await sb.rpc('is_authorized_admin');
+      var isAuthorized = !error && authorized === true;
+
+      document.getElementById('adminlogin-not-authorized').style.display = isAuthorized ? 'none' : '';
+      document.getElementById('adminlogin-change-password').style.display = isAuthorized ? '' : 'none';
+    }
+
+    document.getElementById('adminlogin-signin-btn').addEventListener('click', async function () {
+      var email = document.getElementById('adminlogin-email').value.trim();
+      var password = document.getElementById('adminlogin-password').value;
+      if (!email || !password) {
+        setStatus('adminlogin-status', 'Enter both email and password.', 'error');
+        return;
+      }
+
+      var btn = this;
+      btn.disabled = true;
+      setStatus('adminlogin-status', 'Signing in…', 'loading');
+
+      var { error } = await sb.auth.signInWithPassword({ email: email, password: password });
+
+      btn.disabled = false;
+
+      if (error) {
+        setStatus('adminlogin-status', 'Error: ' + error.message, 'error');
+        return;
+      }
+
+      document.getElementById('adminlogin-password').value = '';
+      setStatus('adminlogin-status', '', '');
+      refreshAdminLoginUi();
+    });
+
+    document.getElementById('adminlogin-signout-btn').addEventListener('click', async function () {
+      await sb.auth.signOut();
+      refreshAdminLoginUi();
+    });
+
+    document.getElementById('adminlogin-change-btn').addEventListener('click', async function () {
+      var newPassword = document.getElementById('adminlogin-new-password').value;
+      var confirmPassword = document.getElementById('adminlogin-confirm-password').value;
+
+      if (!newPassword || newPassword.length < 6) {
+        setStatus('adminlogin-change-status', 'New password must be at least 6 characters.', 'error');
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        setStatus('adminlogin-change-status', 'Passwords do not match.', 'error');
+        return;
+      }
+      if (!confirm('Change the shared admin password used for Zones/Employees? Anyone using the old password will need the new one.')) return;
+
+      var btn = this;
+      btn.disabled = true;
+      setStatus('adminlogin-change-status', 'Changing…', 'loading');
+
+      var { error } = await sb.rpc('change_admin_password', { p_new_password: newPassword });
+
+      btn.disabled = false;
+
+      if (error) {
+        setStatus('adminlogin-change-status', 'Error: ' + error.message, 'error');
+        return;
+      }
+
+      document.getElementById('adminlogin-new-password').value = '';
+      document.getElementById('adminlogin-confirm-password').value = '';
+      setStatus('adminlogin-change-status', 'Admin password changed.', 'success');
+    });
+  </script>
+
+</body>
+</html>
