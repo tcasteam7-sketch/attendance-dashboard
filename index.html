@@ -446,7 +446,7 @@
       <div class="card" style="margin-top:16px;">
         <div class="panel-title">
           Data Retention
-          <span class="hint">Rolling 3-month window: the current month plus the two before it are kept.</span>
+          <span class="hint">Rolling 2-month window: the current month plus the one before it are kept.</span>
         </div>
         <p style="font-size:13px; color:var(--muted); margin:0 0 12px;">
           Entries older than <strong id="retention-cutoff-date">—</strong> are eligible for deletion.
@@ -1284,7 +1284,7 @@
     (function () {
       var cutoff = new Date();
       cutoff.setDate(1);
-      cutoff.setMonth(cutoff.getMonth() - 2);
+      cutoff.setMonth(cutoff.getMonth() - 1);
       document.getElementById('retention-cutoff-date').textContent =
         cutoff.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
     })();
