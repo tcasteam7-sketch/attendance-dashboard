@@ -739,7 +739,7 @@
     async function loadFilterOptions() {
       var zones;
       try {
-        zones = await api('getZones');
+        zones = await apiList('getZones');
       } catch (err) {
         console.error(err);
         return [];
@@ -1049,7 +1049,7 @@
       setStatus('employee-list-status', 'Loading…', 'loading');
       var data;
       try {
-        data = await api('getEmployees');
+        data = await apiList('getEmployees');
       } catch (err) {
         setStatus('employee-list-status', 'Error: ' + err.message, 'error');
         return;
@@ -1204,7 +1204,7 @@
       setStatus('zone-list-status', 'Loading…', 'loading');
       var zones;
       try {
-        zones = await api('getZones');
+        zones = await apiList('getZones');
       } catch (err) {
         setStatus('zone-list-status', 'Error: ' + err.message, 'error');
         return;

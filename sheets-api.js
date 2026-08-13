@@ -59,5 +59,20 @@
       });
   };
 
+  /**
+   * Same as api(), but guarantees an array back. Without this, a backend that
+   * returns an unexpected shape surfaces as "x.forEach is not a function" from
+   * deep inside the page instead of something that names the actual problem.
+   */
+  window.apiList = function (action, params) {
+    return window.api(action, params).then(function (data) {
+      if (Array.isArray(data)) return data;
+      if (data && Array.isArray(data.zones)) return data.zones;
+      throw new Error('Expected a list from "' + action + '" but the backend returned ' +
+        (data === null || data === undefined ? String(data) : typeof data) +
+        '. Redeploy the Apps Script (Deploy → Manage deployments → New version).');
+    });
+  };
+
   window.apiIsConfigured = isConfigured;
 })();
