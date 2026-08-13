@@ -169,7 +169,7 @@
   <header>
     <div>
       <h1>Leave &amp; Attendance Dashboard</h1>
-      <div class="sub">Backed by Supabase</div>
+      <div class="sub">Reads live from the Google Sheet</div>
     </div>
     <span class="pill" id="clock"></span>
   </header>
@@ -437,7 +437,7 @@
       <div class="card">
         <div class="panel-title">
           Existing Zones
-          <span class="hint">Zones referenced by existing entries can't be removed (the database blocks it) until those entries are reassigned.</span>
+          <span class="hint">One zone = one sheet tab. Registering creates the tab, renaming renames it, and a zone that still has entries or assigned employees can't be removed until those are moved.</span>
         </div>
         <div class="status-line" id="zone-list-status"></div>
         <div class="table-wrap"><table id="zone-list-table"><thead></thead><tbody></tbody></table></div>
@@ -449,9 +449,10 @@
           <span class="hint">Rolling 2-month window: the current month plus the one before it are kept.</span>
         </div>
         <p style="font-size:13px; color:var(--muted); margin:0 0 12px;">
-          Entries older than <strong id="retention-cutoff-date">—</strong> are eligible for deletion.
-          Automatic monthly cleanup only runs if <code>pg_cron</code> is enabled on your Supabase
-          project (Database → Extensions) — otherwise use the button below manually.
+          Rows dated before <strong id="retention-cutoff-date">—</strong> are eligible for deletion from
+          their zone tabs. Automatic monthly cleanup only runs if you have run
+          <code>installMonthlyPurgeTrigger()</code> once in the Apps Script editor — otherwise use the
+          button below manually. Deleted rows are gone from the sheet; keep a copy first if you need one.
         </p>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
           <button type="button" class="secondary" id="retention-preview-btn">Preview</button>
@@ -466,21 +467,13 @@
       <div class="card" style="margin-bottom:16px; max-width:420px;">
         <div class="panel-title">Admin Login</div>
         <p style="font-size:13px; color:var(--muted); margin:0 0 12px;">
-          Separate from the shared Zones/Employees admin password above — only
-          specific authorized accounts can sign in here, and only to change that
-          shared password.
+          Separate from the shared Zones/Employees admin password — sign in with an
+          authorized Google account to change that shared password. The account is
+          checked inside the Apps Script backend, not here in the page.
         </p>
 
         <div id="adminlogin-signed-out">
-          <div class="field">
-            <label for="adminlogin-email">Email</label>
-            <input type="email" id="adminlogin-email">
-          </div>
-          <div class="field">
-            <label for="adminlogin-password">Password</label>
-            <input type="password" id="adminlogin-password">
-          </div>
-          <button type="button" class="primary" id="adminlogin-signin-btn">Sign In</button>
+          <div id="google-signin-button"></div>
           <div class="status-line" id="adminlogin-status"></div>
         </div>
 
@@ -511,12 +504,10 @@
 
   </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="config.js"></script>
-  <script src="supabase-client.js"></script>
+  <script src="sheets-api.js"></script>
   <script>
-    var sb = window.supabaseClient;
-
     /* ---------- tab navigation ---------- */
     document.querySelectorAll('.tab-btn').forEach(function (btn) {
       btn.addEventListener('click', function () {
@@ -639,15 +630,6 @@
       });
     }
 
-    function countBy(rows, key) {
-      var counts = {};
-      rows.forEach(function (r) {
-        var v = r[key] || 'Unspecified';
-        counts[v] = (counts[v] || 0) + 1;
-      });
-      return counts;
-    }
-
     function leaveRowsToTable(rows) {
       var headers = ['Date', 'Employee Code', 'Employee Name', 'Mobile', 'Section', 'Leave From', 'Leave To', 'Team Leader', 'Remarks'];
       var data = rows.map(function (r) {
@@ -716,12 +698,13 @@
 
     /* ---------- init: load zone list into filter dropdowns ---------- */
     async function loadFilterOptions() {
-      var { data, error } = await sb.from('zones').select('name').order('name');
-      if (error) {
-        console.error(error);
-        return;
+      var zones;
+      try {
+        zones = await api('getZones');
+      } catch (err) {
+        console.error(err);
+        return [];
       }
-      var zones = data.map(function (r) { return r.name; });
       populateZoneSelect(document.getElementById('leave-zone'), zones);
       populateZoneSelect(document.getElementById('missing-zone'), zones);
       populateZoneSelect(document.getElementById('entries-zone'), zones);
@@ -746,37 +729,31 @@
       var start = daysAgoIso(30);
       var end = todayIso();
 
-      var [empRes, leaveRes, missingRes, unmatchedRes] = await Promise.all([
-        sb.from('employees').select('*', { count: 'exact', head: true }),
-        sb.rpc('get_leave_report', { p_start: start, p_end: end, p_zone: null, p_query: null }),
-        sb.rpc('get_missing_entries', { p_start: start, p_end: end, p_zone: null }),
-        sb.rpc('get_unmatched_entries', { p_limit: 200 })
-      ]);
-
-      var firstError = empRes.error || leaveRes.error || missingRes.error || unmatchedRes.error;
-      if (firstError) {
-        setStatus('dashboard-status', 'Error: ' + firstError.message, 'error');
+      // One request, not four: each report has to scan every zone tab, and
+      // Sheets reads are slow enough that four round trips is visibly worse.
+      var summary;
+      try {
+        summary = await api('getDashboard', { start: start, end: end });
+      } catch (err) {
+        setStatus('dashboard-status', 'Error: ' + err.message, 'error');
         return;
       }
       setStatus('dashboard-status', '', '');
 
-      var leaveRows = leaveRes.data || [];
-      var missingRows = missingRes.data || [];
-
       var tiles = document.querySelectorAll('#dashboard-tiles .stat-tile .value');
-      tiles[0].textContent = empRes.count || 0;
-      tiles[1].textContent = leaveRows.length;
-      tiles[2].textContent = missingRows.length;
-      var unmatchedCount = (unmatchedRes.data || []).length;
+      tiles[0].textContent = summary.employee_count || 0;
+      tiles[1].textContent = summary.leave_count || 0;
+      tiles[2].textContent = summary.missing_count || 0;
+      var unmatchedCount = summary.unmatched_count || 0;
       tiles[3].textContent = unmatchedCount;
       var unmatchedTile = document.querySelectorAll('#dashboard-tiles .stat-tile')[3];
       unmatchedTile.classList.toggle('tone-green', unmatchedCount === 0);
       unmatchedTile.classList.toggle('tone-red', unmatchedCount > 0);
 
-      renderBarChart('chart-leave-zone', countBy(leaveRows, 'current_working_section'), '');
-      renderBarChart('chart-missing-zone', countBy(missingRows, 'zone'), 'amber');
+      renderBarChart('chart-leave-zone', summary.leave_by_zone, '');
+      renderBarChart('chart-missing-zone', summary.missing_by_zone, 'amber');
 
-      var table = leaveRowsToTable(leaveRows.slice(0, 10));
+      var table = leaveRowsToTable(summary.leave_recent || []);
       renderTable('dashboard-recent-table', table.headers, table.rows, { 4: zoneBadge });
     }
     document.getElementById('refresh-dashboard-btn').addEventListener('click', loadDashboard);
@@ -869,19 +846,21 @@
       btn.disabled = true;
       setStatus('leave-status', 'Generating report…', 'loading');
 
-      var { data, error } = await sb.rpc('get_leave_report', {
-        p_start: document.getElementById('leave-start').value || null,
-        p_end: document.getElementById('leave-end').value || null,
-        p_zone: document.getElementById('leave-zone').value || null,
-        p_query: document.getElementById('leave-employee').value || null
-      });
-
-      btn.disabled = false;
-
-      if (error) {
-        setStatus('leave-status', 'Error: ' + error.message, 'error');
+      var data;
+      try {
+        data = await api('getLeaveReport', {
+          start: document.getElementById('leave-start').value || null,
+          end: document.getElementById('leave-end').value || null,
+          zone: document.getElementById('leave-zone').value || null,
+          query: document.getElementById('leave-employee').value || null
+        });
+      } catch (err) {
+        btn.disabled = false;
+        setStatus('leave-status', 'Error: ' + err.message, 'error');
         return;
       }
+
+      btn.disabled = false;
 
       var table = leaveRowsToTable(data);
       setStatus('leave-status', data.length + ' record(s) found.', 'success');
@@ -909,18 +888,20 @@
       btn.disabled = true;
       setStatus('missing-status', 'Checking attendance…', 'loading');
 
-      var { data, error } = await sb.rpc('get_missing_entries', {
-        p_start: start,
-        p_end: end,
-        p_zone: document.getElementById('missing-zone').value || null
-      });
-
-      btn.disabled = false;
-
-      if (error) {
-        setStatus('missing-status', 'Error: ' + error.message, 'error');
+      var data;
+      try {
+        data = await api('getMissingEntries', {
+          start: start,
+          end: end,
+          zone: document.getElementById('missing-zone').value || null
+        });
+      } catch (err) {
+        btn.disabled = false;
+        setStatus('missing-status', 'Error: ' + err.message, 'error');
         return;
       }
+
+      btn.disabled = false;
 
       var table = missingRowsToTable(data);
       setStatus('missing-status', data.length + ' missing record(s) found.', 'success');
@@ -943,18 +924,20 @@
       btn.disabled = true;
       setStatus('entries-status', 'Loading entries…', 'loading');
 
-      var { data, error } = await sb.rpc('get_entries', {
-        p_start: document.getElementById('entries-start').value || null,
-        p_end: document.getElementById('entries-end').value || null,
-        p_zone: document.getElementById('entries-zone').value || null
-      });
-
-      btn.disabled = false;
-
-      if (error) {
-        setStatus('entries-status', 'Error: ' + error.message, 'error');
+      var data;
+      try {
+        data = await api('getEntries', {
+          start: document.getElementById('entries-start').value || null,
+          end: document.getElementById('entries-end').value || null,
+          zone: document.getElementById('entries-zone').value || null
+        });
+      } catch (err) {
+        btn.disabled = false;
+        setStatus('entries-status', 'Error: ' + err.message, 'error');
         return;
       }
+
+      btn.disabled = false;
 
       var table = entriesRowsToTable(data);
       setStatus('entries-status', data.length + ' entr' + (data.length === 1 ? 'y' : 'ies') + ' found.', 'success');
@@ -988,18 +971,20 @@
       btn.disabled = true;
       setStatus('worksummary-status', 'Loading…', 'loading');
 
-      var { data, error } = await sb.rpc('get_entries', {
-        p_start: document.getElementById('worksummary-start').value || null,
-        p_end: document.getElementById('worksummary-end').value || null,
-        p_zone: document.getElementById('worksummary-zone').value || null
-      });
-
-      btn.disabled = false;
-
-      if (error) {
-        setStatus('worksummary-status', 'Error: ' + error.message, 'error');
+      var data;
+      try {
+        data = await api('getEntries', {
+          start: document.getElementById('worksummary-start').value || null,
+          end: document.getElementById('worksummary-end').value || null,
+          zone: document.getElementById('worksummary-zone').value || null
+        });
+      } catch (err) {
+        btn.disabled = false;
+        setStatus('worksummary-status', 'Error: ' + err.message, 'error');
         return;
       }
+
+      btn.disabled = false;
 
       var table = workSummaryRowsToTable(data);
       setStatus('worksummary-status', table.rows.length + ' work record(s) found.', 'success');
@@ -1023,13 +1008,17 @@
 
     async function loadEmployees() {
       setStatus('employee-list-status', 'Loading…', 'loading');
-      var { data, error } = await sb.from('employees').select('*').order('name');
-      if (error) {
-        setStatus('employee-list-status', 'Error: ' + error.message, 'error');
+      var data;
+      try {
+        data = await api('getEmployees');
+      } catch (err) {
+        setStatus('employee-list-status', 'Error: ' + err.message, 'error');
         return;
       }
       setStatus('employee-list-status', '', '');
-      allEmployees = data;
+      allEmployees = data.sort(function (a, b) {
+        return (a.name || '').localeCompare(b.name || '');
+      });
       applyEmployeeFilters();
     }
 
@@ -1145,25 +1134,26 @@
       btn.disabled = true;
       setStatus('employee-form-status', 'Saving…', 'loading');
 
-      var { error } = await sb.rpc('admin_upsert_employee', {
-        p_password: password,
-        p_employee_code: code,
-        p_name: name,
-        p_designation: document.getElementById('emp-designation').value || null,
-        p_home_location: document.getElementById('emp-homeLocation').value || null,
-        p_mobile: document.getElementById('emp-mobile').value || null,
-        p_email: document.getElementById('emp-email').value || null,
-        p_team_leader: document.getElementById('emp-teamLeader').value || null,
-        p_section_name: document.getElementById('emp-sectionName').value || null,
-        p_zone: document.getElementById('emp-zone').value || null
-      });
-
-      btn.disabled = false;
-
-      if (error) {
-        setStatus('employee-form-status', 'Error: ' + error.message, 'error');
+      try {
+        await api('adminUpsertEmployee', {
+          password: password,
+          employee_code: code,
+          name: name,
+          designation: document.getElementById('emp-designation').value || null,
+          home_location: document.getElementById('emp-homeLocation').value || null,
+          mobile: document.getElementById('emp-mobile').value || null,
+          email: document.getElementById('emp-email').value || null,
+          team_leader: document.getElementById('emp-teamLeader').value || null,
+          section_name: document.getElementById('emp-sectionName').value || null,
+          zone: document.getElementById('emp-zone').value || null
+        });
+      } catch (err) {
+        btn.disabled = false;
+        setStatus('employee-form-status', 'Error: ' + err.message, 'error');
         return;
       }
+
+      btn.disabled = false;
 
       setStatus('employee-form-status', (editingEmployeeCode ? 'Employee updated.' : 'Employee added.'), 'success');
       resetEmployeeForm();
@@ -1173,13 +1163,15 @@
     /* ---------- zone registration ---------- */
     async function loadZoneList() {
       setStatus('zone-list-status', 'Loading…', 'loading');
-      var { data, error } = await sb.from('zones').select('name').order('name');
-      if (error) {
-        setStatus('zone-list-status', 'Error: ' + error.message, 'error');
+      var zones;
+      try {
+        zones = await api('getZones');
+      } catch (err) {
+        setStatus('zone-list-status', 'Error: ' + err.message, 'error');
         return;
       }
       setStatus('zone-list-status', '', '');
-      renderZoneTable(data.map(function (r) { return r.name; }));
+      renderZoneTable(zones);
     }
 
     function renderZoneTable(zones) {
@@ -1217,9 +1209,10 @@
           var newName = nameInput.value.trim();
           if (!newName || newName === zone) return;
           setStatus('zone-list-status', 'Renaming…', 'loading');
-          var { error } = await sb.rpc('admin_rename_zone', { p_password: password, p_old_name: zone, p_new_name: newName });
-          if (error) {
-            setStatus('zone-list-status', 'Error: ' + error.message, 'error');
+          try {
+            await api('adminRenameZone', { password: password, old_name: zone, new_name: newName });
+          } catch (err) {
+            setStatus('zone-list-status', 'Error: ' + err.message, 'error');
             return;
           }
           setStatus('zone-list-status', 'Zone renamed.', 'success');
@@ -1234,11 +1227,12 @@
         removeBtn.addEventListener('click', async function () {
           var password = document.getElementById('zone-admin-password').value;
           if (!password) { setStatus('zone-list-status', 'Enter the admin password above first.', 'error'); return; }
-          if (!confirm('Remove zone "' + zone + '"? Entries already using this zone will block the removal.')) return;
+          if (!confirm('Remove zone "' + zone + '"? This deletes its sheet tab. Existing entries or assigned employees will block the removal.')) return;
           setStatus('zone-list-status', 'Removing…', 'loading');
-          var { error } = await sb.rpc('admin_remove_zone', { p_password: password, p_zone: zone });
-          if (error) {
-            setStatus('zone-list-status', 'Error: ' + error.message, 'error');
+          try {
+            await api('adminRemoveZone', { password: password, zone: zone });
+          } catch (err) {
+            setStatus('zone-list-status', 'Error: ' + err.message, 'error');
             return;
           }
           setStatus('zone-list-status', 'Zone removed.', 'success');
@@ -1265,16 +1259,16 @@
       btn.disabled = true;
       setStatus('zone-add-status', 'Registering…', 'loading');
 
-      var { error } = await sb.rpc('admin_add_zone', { p_password: password, p_zone: name });
-
-      btn.disabled = false;
-
-      if (error) {
-        setStatus('zone-add-status', 'Error: ' + error.message, 'error');
+      try {
+        await api('adminAddZone', { password: password, zone: name });
+      } catch (err) {
+        btn.disabled = false;
+        setStatus('zone-add-status', 'Error: ' + err.message, 'error');
         return;
       }
 
-      setStatus('zone-add-status', 'Zone registered.', 'success');
+      btn.disabled = false;
+      setStatus('zone-add-status', 'Zone registered — a sheet tab was created for it.', 'success');
       document.getElementById('zone-add-name').value = '';
       loadZoneList();
       loadFilterOptions().then(refreshZoneDropdowns);
@@ -1294,15 +1288,18 @@
       btn.disabled = true;
       setStatus('retention-status', 'Checking…', 'loading');
 
-      var { data, error } = await sb.rpc('preview_purge_old_entries');
-
-      btn.disabled = false;
-
-      if (error) {
-        setStatus('retention-status', 'Error: ' + error.message, 'error');
+      var result;
+      try {
+        result = await api('previewPurge');
+      } catch (err) {
+        btn.disabled = false;
+        setStatus('retention-status', 'Error: ' + err.message, 'error');
         return;
       }
 
+      btn.disabled = false;
+
+      var data = result.count;
       var purgeBtn = document.getElementById('retention-purge-btn');
       if (data > 0) {
         setStatus('retention-status', data + ' entr' + (data === 1 ? 'y' : 'ies') + ' older than the retention window — ready to purge.', 'success');
@@ -1316,73 +1313,99 @@
     document.getElementById('retention-purge-btn').addEventListener('click', async function () {
       var password = document.getElementById('zone-admin-password').value;
       if (!password) { setStatus('retention-status', 'Enter the admin password above first.', 'error'); return; }
-      if (!confirm('Permanently delete all entries older than the 3-month retention window? This cannot be undone.')) return;
+      if (!confirm('Permanently delete every row older than the retention window from its sheet tab? This cannot be undone.')) return;
 
       var btn = this;
       btn.disabled = true;
       setStatus('retention-status', 'Purging…', 'loading');
 
-      var { data, error } = await sb.rpc('admin_purge_old_entries', { p_password: password });
-
-      if (error) {
+      var result;
+      try {
+        result = await api('adminPurge', { password: password });
+      } catch (err) {
         btn.disabled = false;
-        setStatus('retention-status', 'Error: ' + error.message, 'error');
+        setStatus('retention-status', 'Error: ' + err.message, 'error');
         return;
       }
 
-      setStatus('retention-status', 'Purged ' + data + ' entr' + (data === 1 ? 'y' : 'ies') + '.', 'success');
+      setStatus('retention-status', 'Purged ' + result.count + ' entr' + (result.count === 1 ? 'y' : 'ies') + '.', 'success');
     });
 
-    /* ---------- admin login (restricted — separate from the shared admin password) ---------- */
-    async function refreshAdminLoginUi() {
-      var { data: { session } } = await sb.auth.getSession();
+    /* ---------- admin login (Google Sign-In — separate from the shared admin password) ----------
+       The ID token issued here is only a claim until the backend checks it:
+       WEB.gs verifies the signature with Google, confirms the token was issued
+       for this app, and matches the email against its own allow-list. Nothing
+       on this page decides who is an admin. */
+    var adminIdToken = null;
+    var adminEmail = null;
+    var googleButtonRendered = false;
 
-      if (!session) {
-        document.getElementById('adminlogin-signed-out').style.display = '';
-        document.getElementById('adminlogin-signed-in').style.display = 'none';
-        return;
+    function renderAdminLoginState() {
+      var signedIn = !!adminIdToken && !!adminEmail;
+      document.getElementById('adminlogin-signed-out').style.display = signedIn ? 'none' : '';
+      document.getElementById('adminlogin-signed-in').style.display = signedIn ? '' : 'none';
+      if (signedIn) {
+        document.getElementById('adminlogin-current-email').textContent = adminEmail;
+        document.getElementById('adminlogin-not-authorized').style.display = 'none';
+        document.getElementById('adminlogin-change-password').style.display = '';
       }
-
-      document.getElementById('adminlogin-signed-out').style.display = 'none';
-      document.getElementById('adminlogin-signed-in').style.display = '';
-      document.getElementById('adminlogin-current-email').textContent = session.user.email;
-
-      var { data: authorized, error } = await sb.rpc('is_authorized_admin');
-      var isAuthorized = !error && authorized === true;
-
-      document.getElementById('adminlogin-not-authorized').style.display = isAuthorized ? 'none' : '';
-      document.getElementById('adminlogin-change-password').style.display = isAuthorized ? '' : 'none';
     }
 
-    document.getElementById('adminlogin-signin-btn').addEventListener('click', async function () {
-      var email = document.getElementById('adminlogin-email').value.trim();
-      var password = document.getElementById('adminlogin-password').value;
-      if (!email || !password) {
-        setStatus('adminlogin-status', 'Enter both email and password.', 'error');
+    async function handleCredentialResponse(response) {
+      setStatus('adminlogin-status', 'Verifying…', 'loading');
+      try {
+        var result = await api('checkAdmin', { id_token: response.credential });
+        adminIdToken = response.credential;
+        adminEmail = result.email;
+        setStatus('adminlogin-status', '', '');
+      } catch (err) {
+        adminIdToken = null;
+        adminEmail = null;
+        setStatus('adminlogin-status', err.message, 'error');
+      }
+      renderAdminLoginState();
+    }
+
+    // The GIS library is loaded async, so the button can only be drawn once it
+    // has actually arrived — which may be after the user opens this tab.
+    function initGoogleSignIn(attempt) {
+      if (googleButtonRendered) return;
+      var clientId = (window.API_CONFIG || {}).googleClientId;
+      if (!clientId) {
+        document.getElementById('google-signin-button').innerHTML =
+          '<span style="font-size:13px; color:var(--muted);">Admin login is not configured — set <code>googleClientId</code> in config.js and <code>CONFIG.GOOGLE_CLIENT_ID</code> in WEB.gs.</span>';
+        return;
+      }
+      if (!window.google || !window.google.accounts || !window.google.accounts.id) {
+        if ((attempt || 0) < 20) setTimeout(function () { initGoogleSignIn((attempt || 0) + 1); }, 250);
         return;
       }
 
-      var btn = this;
-      btn.disabled = true;
-      setStatus('adminlogin-status', 'Signing in…', 'loading');
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: handleCredentialResponse
+      });
+      window.google.accounts.id.renderButton(
+        document.getElementById('google-signin-button'),
+        { theme: 'outline', size: 'large', text: 'signin_with' }
+      );
+      googleButtonRendered = true;
+    }
 
-      var { error } = await sb.auth.signInWithPassword({ email: email, password: password });
+    function refreshAdminLoginUi() {
+      initGoogleSignIn(0);
+      renderAdminLoginState();
+    }
 
-      btn.disabled = false;
-
-      if (error) {
-        setStatus('adminlogin-status', 'Error: ' + error.message, 'error');
-        return;
+    document.getElementById('adminlogin-signout-btn').addEventListener('click', function () {
+      adminIdToken = null;
+      adminEmail = null;
+      if (window.google && window.google.accounts && window.google.accounts.id) {
+        window.google.accounts.id.disableAutoSelect();
       }
-
-      document.getElementById('adminlogin-password').value = '';
       setStatus('adminlogin-status', '', '');
-      refreshAdminLoginUi();
-    });
-
-    document.getElementById('adminlogin-signout-btn').addEventListener('click', async function () {
-      await sb.auth.signOut();
-      refreshAdminLoginUi();
+      setStatus('adminlogin-change-status', '', '');
+      renderAdminLoginState();
     });
 
     document.getElementById('adminlogin-change-btn').addEventListener('click', async function () {
@@ -1403,14 +1426,18 @@
       btn.disabled = true;
       setStatus('adminlogin-change-status', 'Changing…', 'loading');
 
-      var { error } = await sb.rpc('change_admin_password', { p_new_password: newPassword });
-
-      btn.disabled = false;
-
-      if (error) {
-        setStatus('adminlogin-change-status', 'Error: ' + error.message, 'error');
+      try {
+        await api('changeAdminPassword', { id_token: adminIdToken, new_password: newPassword });
+      } catch (err) {
+        btn.disabled = false;
+        // Google ID tokens expire after about an hour, so a long-idle tab will
+        // fail here rather than at sign-in time.
+        setStatus('adminlogin-change-status', 'Error: ' + err.message +
+          ' (if you signed in a while ago, sign out and back in.)', 'error');
         return;
       }
+
+      btn.disabled = false;
 
       document.getElementById('adminlogin-new-password').value = '';
       document.getElementById('adminlogin-confirm-password').value = '';
