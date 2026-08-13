@@ -44,9 +44,16 @@
     nav {
       display: flex;
       gap: 8px;
-      padding: 16px 24px;
+      padding: 14px 24px;
       background: var(--bg);
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      position: sticky;
+      top: 0;
+      z-index: 15;
     }
+    nav::-webkit-scrollbar { display: none; }
     nav button {
       border: 1px solid var(--border);
       background: var(--card);
@@ -56,7 +63,11 @@
       font-weight: 600;
       cursor: pointer;
       color: var(--ink);
+      white-space: nowrap;
+      flex-shrink: 0;
+      min-height: 42px;
     }
+    nav button:hover { border-color: #c8ccd6; }
     nav button.active {
       background: var(--dark);
       border-color: var(--dark);
@@ -65,22 +76,35 @@
     main { padding: 0 24px 24px; max-width: 1200px; margin: 0 auto; }
 
     @media (max-width: 640px) {
+      body { font-size: 15px; }
       header { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
-      nav {
-        padding: 12px 16px;
-        overflow-x: auto;
-        flex-wrap: nowrap;
-        -webkit-overflow-scrolling: touch;
-      }
-      nav button { flex-shrink: 0; }
+      header h1 { font-size: 16px; }
+      nav { padding: 12px 16px; }
+      nav button { padding: 10px 14px; font-size: 13px; }
       main { padding: 0 16px 16px; }
-      form.filters { align-items: stretch; }
+      .card { padding: 14px 16px; border-radius: 10px; }
+      .grid { gap: 12px; margin-bottom: 16px; }
+      .stat-tile .value { font-size: 26px; }
+
+      form.filters { align-items: stretch; gap: 10px; }
       form.filters .field { min-width: 0; flex: 1 1 140px; }
+      /* the desktop min-width would otherwise force horizontal page scroll */
+      .field input, .field select { min-width: 0; width: 100%; }
+      form.filters button { flex: 1 1 auto; min-height: 44px; }
+
+      .bar-row .bar-label { width: 68px; font-size: 12px; }
+      .table-wrap { max-height: 60vh; }
     }
     .view { display: none; }
     .view.active { display: block; }
 
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .grid.two { grid-template-columns: 1fr 1fr; }
+    /* must follow the rule above, not sit in an earlier @media block — same
+       specificity means source order decides the winner */
+    @media (max-width: 860px) {
+      .grid.two { grid-template-columns: 1fr; }
+    }
     .card {
       background: var(--card);
       border: 1px solid var(--border);
@@ -108,11 +132,20 @@
     .field { display: flex; flex-direction: column; gap: 4px; }
     .field label { font-size: 12px; color: var(--muted); }
     .field input, .field select {
-      padding: 8px 10px;
+      padding: 9px 11px;
       border: 1px solid var(--border);
       border-radius: 6px;
       font-size: 13px;
+      font-family: inherit;
+      color: var(--ink);
+      background: #fff;
       min-width: 150px;
+      min-height: 40px;
+    }
+    .field input:focus, .field select:focus {
+      outline: none;
+      border-color: var(--orange);
+      box-shadow: 0 0 0 3px rgba(242, 131, 15, .15);
     }
     button.primary {
       background: var(--orange);
@@ -123,18 +156,24 @@
       font-size: 13px;
       font-weight: 600;
       cursor: pointer;
+      min-height: 40px;
+      font-family: inherit;
     }
     button.primary:hover { background: var(--orange-dark); }
     button.primary:disabled { background: #f7c894; cursor: default; }
     button.secondary {
-      background: none;
+      background: #fff;
       border: 1px solid var(--border);
       padding: 9px 14px;
       border-radius: 6px;
       font-size: 13px;
       cursor: pointer;
       color: var(--ink);
+      min-height: 40px;
+      font-family: inherit;
     }
+    button.secondary:hover { border-color: #c8ccd6; background: #fafbfc; }
+    button.secondary:disabled { color: #a8adba; cursor: default; background: #f7f8fa; }
 
     .status-line { font-size: 13px; margin-bottom: 12px; min-height: 18px; }
     .status-line.error { color: var(--red); }
@@ -198,7 +237,7 @@
         <div class="card stat-tile tone-green"><div class="label">Unmatched Entries</div><div class="value">&mdash;</div></div>
       </div>
 
-      <div class="grid" style="grid-template-columns: 1fr 1fr;">
+      <div class="grid two">
         <div class="card">
           <div class="panel-title">Leave by Section <span class="hint">last 30 days</span></div>
           <div id="chart-leave-zone"></div>
