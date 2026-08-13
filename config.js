@@ -6,7 +6,10 @@
 // gated inside WEB.gs (admin password / Google Sign-In) rather than by hiding
 // this value.
 window.API_CONFIG = {
-  url: 'https://script.googleusercontent.com/macros/echo?user_content_key=AUkAhnQoccvXjR4gl-XLuDRoA8BsDfKqFfG6Xb_jj4U8TlgjhpEL8HlhmPULBfZfWb6VO_F2MKas7itimKlj3Ipob3AXtaon6VGDXnj4wrrtRZeAmQxO4VSlPszlVIF79VXMHRua5Q1ZJl8F2gTryNXHEEkjuVKgwJdvUr0qw7DQ3Av1wmuzbWM7wa4XesBjse3Oe1uMniESZGBijjBaZF6bW6URqQ89upmqgf8_N5CzgoHflMHBsBclbxMV8TDJC-903DfeuGi-PHvuCswaIQShHIfKg3Jf0A&lib=MUzt7Kb0-U-TRYMmG93HyFqUvdGhh_fup',
+  // Must be the /exec deployment URL. The script.googleusercontent.com/macros/echo
+  // address the browser lands on after running the script is session-bound and
+  // will fail here with "Failed to fetch".
+  url: 'https://script.google.com/macros/s/AKfycbwNRTt8EV33_ae0EW5GcomtJZzTOMakkk2FW9asxFl2RpHBojcoaC_dWLB5jDpHk68T4Q/exec',
 
   // Only needed for the dashboard's Admin Login tab. Create an OAuth 2.0 Web
   // client ID in Google Cloud Console, add your GitHub Pages origin to its
