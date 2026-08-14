@@ -38,6 +38,21 @@
       body: JSON.stringify(body),
       redirect: 'follow'
     })
+      // A rejection here means the request never completed at all — no HTTP
+      // status came back. The browser reports every such case as the same
+      // opaque "Failed to fetch", so name the likely cause instead: Apps
+      // Script redirects /exec to script.googleusercontent.com, and corporate
+      // networks routinely allow google.com while blocking that second domain.
+      .catch(function (err) {
+        throw new Error(
+          'Could not reach the backend — the request was blocked before it got a reply. ' +
+          'On an office or school network this is usually a firewall: ask IT to allow ' +
+          'script.google.com AND script.googleusercontent.com (requests redirect to the ' +
+          'second one, which is often blocked even when the first is allowed). ' +
+          'Otherwise check your internet connection, or an extension blocking requests. ' +
+          '[' + (err && err.message ? err.message : 'network error') + ']'
+        );
+      })
       .then(function (response) {
         if (!response.ok) {
           throw new Error('Backend returned HTTP ' + response.status + '. Check that the Apps Script deployment is set to "Anyone".');
