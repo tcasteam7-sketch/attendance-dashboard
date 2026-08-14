@@ -330,8 +330,8 @@
           <input type="date" id="entries-end">
         </div>
         <div class="field">
-          <label for="entries-zone">Section</label>
-          <select id="entries-zone"><option value="">All sections</option></select>
+          <label for="entries-zone">Zone</label>
+          <select id="entries-zone"><option value="">All zones</option></select>
         </div>
         <button type="submit" class="primary">Load Entries</button>
         <button type="button" class="secondary" id="entries-clear-btn">Clear Filters</button>
@@ -357,8 +357,8 @@
           <input type="date" id="worksummary-end">
         </div>
         <div class="field">
-          <label for="worksummary-zone">Section</label>
-          <select id="worksummary-zone"><option value="">All sections</option></select>
+          <label for="worksummary-zone">Zone</label>
+          <select id="worksummary-zone"><option value="">All zones</option></select>
         </div>
         <button type="submit" class="primary">Load Summary</button>
         <button type="button" class="secondary" id="worksummary-clear-btn">Clear Filters</button>
@@ -646,7 +646,7 @@
     }
 
     function leaveRowsToTable(rows) {
-      var headers = ['Date', 'Employee Code', 'Employee Name', 'Mobile', 'Section', 'Leave From', 'Leave To', 'Team Leader', 'Remarks'];
+      var headers = ['Date', 'Employee Code', 'Employee Name', 'Mobile', 'Zone', 'Leave From', 'Leave To', 'Team Leader', 'Remarks'];
       var data = rows.map(function (r) {
         return [r.entry_date, r.employee_code, r.employee_name, r.mobile, r.current_working_section, r.leave_from, r.leave_to, r.team_leader, r.remarks];
       });
@@ -662,7 +662,7 @@
     }
 
     function entriesRowsToTable(rows) {
-      var headers = ['Date', 'Section', 'Employee Code', 'Employee Name', 'Designation', 'Mobile', 'Team Leader', 'Check-In', 'Check-Out', 'Works Assigned Station', 'Works Assigned', 'Status', 'Remarks'];
+      var headers = ['Date', 'Zone', 'Employee Code', 'Employee Name', 'Designation', 'Mobile', 'Team Leader', 'Check-In', 'Check-Out', 'Works Assigned Station', 'Works Assigned', 'Status', 'Remarks'];
       var data = rows.map(function (r) {
         return [r.entry_date, r.current_working_section, r.employee_code, r.employee_name, r.designation, r.mobile, r.team_leader, r.check_in_time, r.check_out_time, r.works_assigned_station, r.works_assigned, r.assigned_works_status, r.remarks];
       });
@@ -673,7 +673,7 @@
       var filtered = rows.filter(function (r) {
         return r.works_assigned_station || r.works_assigned || r.assigned_works_status;
       });
-      var headers = ['Date', 'Section', 'Employee Code', 'Employee Name', 'Works Assigned Station', 'Works Assigned', 'Status'];
+      var headers = ['Date', 'Zone', 'Employee Code', 'Employee Name', 'Works Assigned Station', 'Works Assigned', 'Status'];
       var data = filtered.map(function (r) {
         return [r.entry_date, r.current_working_section, r.employee_code, r.employee_name, r.works_assigned_station, r.works_assigned, r.assigned_works_status];
       });
@@ -693,8 +693,8 @@
       [
         { id: 'leave-zone', placeholder: 'All zones' },
         { id: 'missing-zone', placeholder: 'All zones' },
-        { id: 'entries-zone', placeholder: 'All sections' },
-        { id: 'worksummary-zone', placeholder: 'All sections' },
+        { id: 'entries-zone', placeholder: 'All zones' },
+        { id: 'worksummary-zone', placeholder: 'All zones' },
         { id: 'employee-filter-zone', placeholder: 'All zones' }
       ].forEach(function (cfg) {
         var select = document.getElementById(cfg.id);
