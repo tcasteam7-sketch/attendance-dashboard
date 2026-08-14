@@ -221,7 +221,6 @@
     <button class="tab-btn" data-view="worksummary">Work Summary</button>
     <button class="tab-btn" data-view="employees">Employees</button>
     <button class="tab-btn" data-view="zones">Zones</button>
-    <button class="tab-btn" data-view="adminlogin">Admin Login</button>
   </nav>
 
   <main>
@@ -520,49 +519,9 @@
       </div>
     </section>
 
-    <!-- ===================== ADMIN LOGIN VIEW ===================== -->
-    <section id="view-adminlogin" class="view">
-      <div class="card" style="margin-bottom:16px; max-width:420px;">
-        <div class="panel-title">Admin Login</div>
-        <p style="font-size:13px; color:var(--muted); margin:0 0 12px;">
-          Separate from the shared Zones/Employees admin password — sign in with an
-          authorized Google account to change that shared password. The account is
-          checked inside the Apps Script backend, not here in the page.
-        </p>
-
-        <div id="adminlogin-signed-out">
-          <div id="google-signin-button"></div>
-          <div class="status-line" id="adminlogin-status"></div>
-        </div>
-
-        <div id="adminlogin-signed-in" style="display:none;">
-          <p style="font-size:13px;">Signed in as <strong id="adminlogin-current-email"></strong></p>
-          <button type="button" class="secondary" id="adminlogin-signout-btn">Sign Out</button>
-
-          <div id="adminlogin-not-authorized" style="display:none; margin-top:16px;">
-            <p style="font-size:13px; color:var(--red);">This account is not authorized to change the admin password.</p>
-          </div>
-
-          <div id="adminlogin-change-password" style="display:none; margin-top:16px; border-top:1px solid var(--border); padding-top:16px;">
-            <div class="panel-title" style="margin-bottom:8px;">Change Admin Password</div>
-            <div class="field">
-              <label for="adminlogin-new-password">New admin password</label>
-              <input type="password" id="adminlogin-new-password">
-            </div>
-            <div class="field">
-              <label for="adminlogin-confirm-password">Confirm new password</label>
-              <input type="password" id="adminlogin-confirm-password">
-            </div>
-            <button type="button" class="primary" id="adminlogin-change-btn">Change Password</button>
-            <div class="status-line" id="adminlogin-change-status"></div>
-          </div>
-        </div>
-      </div>
-    </section>
 
   </main>
 
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="config.js"></script>
   <script src="sheets-api.js"></script>
   <script>
@@ -579,8 +538,6 @@
           loadZoneList();
         } else if (btn.dataset.view === 'employees') {
           loadEmployees();
-        } else if (btn.dataset.view === 'adminlogin') {
-          refreshAdminLoginUi();
         }
       });
     });
@@ -1444,118 +1401,6 @@
       setStatus('retention-status', 'Purged ' + result.count + ' entr' + (result.count === 1 ? 'y' : 'ies') + '.', 'success');
     });
 
-    /* ---------- admin login (Google Sign-In — separate from the shared admin password) ----------
-       The ID token issued here is only a claim until the backend checks it:
-       WEB.gs verifies the signature with Google, confirms the token was issued
-       for this app, and matches the email against its own allow-list. Nothing
-       on this page decides who is an admin. */
-    var adminIdToken = null;
-    var adminEmail = null;
-    var googleButtonRendered = false;
-
-    function renderAdminLoginState() {
-      var signedIn = !!adminIdToken && !!adminEmail;
-      document.getElementById('adminlogin-signed-out').style.display = signedIn ? 'none' : '';
-      document.getElementById('adminlogin-signed-in').style.display = signedIn ? '' : 'none';
-      if (signedIn) {
-        document.getElementById('adminlogin-current-email').textContent = adminEmail;
-        document.getElementById('adminlogin-not-authorized').style.display = 'none';
-        document.getElementById('adminlogin-change-password').style.display = '';
-      }
-    }
-
-    async function handleCredentialResponse(response) {
-      setStatus('adminlogin-status', 'Verifying…', 'loading');
-      try {
-        var result = await api('checkAdmin', { id_token: response.credential });
-        adminIdToken = response.credential;
-        adminEmail = result.email;
-        setStatus('adminlogin-status', '', '');
-      } catch (err) {
-        adminIdToken = null;
-        adminEmail = null;
-        setStatus('adminlogin-status', err.message, 'error');
-      }
-      renderAdminLoginState();
-    }
-
-    // The GIS library is loaded async, so the button can only be drawn once it
-    // has actually arrived — which may be after the user opens this tab.
-    function initGoogleSignIn(attempt) {
-      if (googleButtonRendered) return;
-      var clientId = (window.API_CONFIG || {}).googleClientId;
-      if (!clientId) {
-        document.getElementById('google-signin-button').innerHTML =
-          '<span style="font-size:13px; color:var(--muted);">Admin login is not configured — set <code>googleClientId</code> in config.js and <code>CONFIG.GOOGLE_CLIENT_ID</code> in WEB.gs.</span>';
-        return;
-      }
-      if (!window.google || !window.google.accounts || !window.google.accounts.id) {
-        if ((attempt || 0) < 20) setTimeout(function () { initGoogleSignIn((attempt || 0) + 1); }, 250);
-        return;
-      }
-
-      window.google.accounts.id.initialize({
-        client_id: clientId,
-        callback: handleCredentialResponse
-      });
-      window.google.accounts.id.renderButton(
-        document.getElementById('google-signin-button'),
-        { theme: 'outline', size: 'large', text: 'signin_with' }
-      );
-      googleButtonRendered = true;
-    }
-
-    function refreshAdminLoginUi() {
-      initGoogleSignIn(0);
-      renderAdminLoginState();
-    }
-
-    document.getElementById('adminlogin-signout-btn').addEventListener('click', function () {
-      adminIdToken = null;
-      adminEmail = null;
-      if (window.google && window.google.accounts && window.google.accounts.id) {
-        window.google.accounts.id.disableAutoSelect();
-      }
-      setStatus('adminlogin-status', '', '');
-      setStatus('adminlogin-change-status', '', '');
-      renderAdminLoginState();
-    });
-
-    document.getElementById('adminlogin-change-btn').addEventListener('click', async function () {
-      var newPassword = document.getElementById('adminlogin-new-password').value;
-      var confirmPassword = document.getElementById('adminlogin-confirm-password').value;
-
-      if (!newPassword || newPassword.length < 6) {
-        setStatus('adminlogin-change-status', 'New password must be at least 6 characters.', 'error');
-        return;
-      }
-      if (newPassword !== confirmPassword) {
-        setStatus('adminlogin-change-status', 'Passwords do not match.', 'error');
-        return;
-      }
-      if (!confirm('Change the shared admin password used for Zones/Employees? Anyone using the old password will need the new one.')) return;
-
-      var btn = this;
-      btn.disabled = true;
-      setStatus('adminlogin-change-status', 'Changing…', 'loading');
-
-      try {
-        await api('changeAdminPassword', { id_token: adminIdToken, new_password: newPassword });
-      } catch (err) {
-        btn.disabled = false;
-        // Google ID tokens expire after about an hour, so a long-idle tab will
-        // fail here rather than at sign-in time.
-        setStatus('adminlogin-change-status', 'Error: ' + err.message +
-          ' (if you signed in a while ago, sign out and back in.)', 'error');
-        return;
-      }
-
-      btn.disabled = false;
-
-      document.getElementById('adminlogin-new-password').value = '';
-      document.getElementById('adminlogin-confirm-password').value = '';
-      setStatus('adminlogin-change-status', 'Admin password changed.', 'success');
-    });
   </script>
 
 </body>
