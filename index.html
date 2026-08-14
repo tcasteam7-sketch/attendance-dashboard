@@ -231,7 +231,11 @@
       <div class="status-line" id="dashboard-status"></div>
 
       <div class="grid" id="dashboard-tiles">
-        <div class="card stat-tile"><div class="label">Total Employees</div><div class="value">&mdash;</div></div>
+        <div class="card stat-tile">
+          <div class="label">Active Employees</div>
+          <div class="value">&mdash;</div>
+          <div class="footnote" id="tile-resigned"></div>
+        </div>
         <div class="card stat-tile tone-orange"><div class="label">On Leave (last 30 days)</div><div class="value">&mdash;</div></div>
         <div class="card stat-tile tone-red"><div class="label">Missing Entries (last 30 days)</div><div class="value">&mdash;</div></div>
         <div class="card stat-tile tone-green"><div class="label">Unmatched Entries</div><div class="value">&mdash;</div></div>
@@ -424,6 +428,13 @@
             <label for="emp-zone">Zone</label>
             <select id="emp-zone"><option value="">Select…</option></select>
           </div>
+          <div class="field">
+            <label for="emp-status">Status</label>
+            <select id="emp-status">
+              <option value="Active">Active</option>
+              <option value="Resigned">Resigned</option>
+            </select>
+          </div>
           <button type="submit" class="primary" id="employee-submit-btn">Add Employee</button>
           <button type="button" class="secondary" id="employee-cancel-edit-btn" style="display:none;">Cancel Edit</button>
         </form>
@@ -439,6 +450,14 @@
           <div class="field">
             <label for="employee-filter-zone">Zone</label>
             <select id="employee-filter-zone"><option value="">All zones</option></select>
+          </div>
+          <div class="field">
+            <label for="employee-filter-status">Status</label>
+            <select id="employee-filter-status">
+              <option value="Active">Active only</option>
+              <option value="Resigned">Resigned only</option>
+              <option value="">All</option>
+            </select>
           </div>
           <div class="field" style="flex:1; min-width:220px;">
             <label for="employee-search">Search (name or employee code)</label>
@@ -781,6 +800,9 @@
 
       var tiles = document.querySelectorAll('#dashboard-tiles .stat-tile .value');
       tiles[0].textContent = summary.employee_count || 0;
+      var resigned = summary.resigned_count || 0;
+      document.getElementById('tile-resigned').textContent =
+        resigned ? resigned + ' resigned (excluded)' : '';
       tiles[1].textContent = summary.leave_count || 0;
       tiles[2].textContent = summary.missing_count || 0;
       var unmatchedCount = summary.unmatched_count || 0;
@@ -1063,10 +1085,13 @@
 
     function applyEmployeeFilters() {
       var zone = document.getElementById('employee-filter-zone').value;
+      var status = document.getElementById('employee-filter-status').value;
       var query = document.getElementById('employee-search').value.trim().toLowerCase();
 
       var filtered = allEmployees.filter(function (emp) {
         if (zone && emp.zone !== zone) return false;
+        // Anything the backend didn't mark Resigned counts as Active.
+        if (status && (emp.status || 'Active') !== status) return false;
         if (query) {
           var name = (emp.name || '').toLowerCase();
           var code = (emp.employee_code || '').toLowerCase();
@@ -1079,9 +1104,11 @@
     }
 
     document.getElementById('employee-filter-zone').addEventListener('change', applyEmployeeFilters);
+    document.getElementById('employee-filter-status').addEventListener('change', applyEmployeeFilters);
     document.getElementById('employee-search').addEventListener('input', applyEmployeeFilters);
     document.getElementById('employee-filter-clear-btn').addEventListener('click', function () {
       document.getElementById('employee-filter-zone').value = '';
+      document.getElementById('employee-filter-status').value = 'Active';
       document.getElementById('employee-search').value = '';
       applyEmployeeFilters();
     });
@@ -1090,7 +1117,7 @@
       var table = document.getElementById('employee-list-table');
       var thead = table.querySelector('thead');
       var tbody = table.querySelector('tbody');
-      var headers = ['Employee Code', 'Name', 'Designation', 'Home Location', 'Mobile', 'Team Leader', 'Section Name', 'Zone', 'Actions'];
+      var headers = ['Employee Code', 'Name', 'Designation', 'Home Location', 'Mobile', 'Team Leader', 'Section Name', 'Zone', 'Status', 'Actions'];
       thead.innerHTML = '<tr>' + headers.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr>';
       tbody.innerHTML = '';
 
@@ -1100,13 +1127,18 @@
       }
 
       employees.forEach(function (emp) {
+        var status = emp.status || 'Active';
+        var resigned = status === 'Resigned';
         var tr = document.createElement('tr');
-        [emp.employee_code, emp.name, emp.designation, emp.home_location, emp.mobile, emp.team_leader, emp.section_name, emp.zone].forEach(function (val, idx) {
+        if (resigned) tr.style.opacity = '.6';
+
+        [emp.employee_code, emp.name, emp.designation, emp.home_location, emp.mobile,
+         emp.team_leader, emp.section_name, emp.zone, status].forEach(function (val, idx) {
           var td = document.createElement('td');
           var text = val === null || val === undefined ? '' : val;
-          if (idx === 7 && text !== '') {
+          if ((idx === 7 || idx === 8) && text !== '') {
             var span = document.createElement('span');
-            span.className = 'badge badge-zone';
+            span.className = 'badge ' + (idx === 7 ? 'badge-zone' : (resigned ? 'badge-neutral' : 'badge-done'));
             span.textContent = text;
             td.appendChild(span);
           } else {
@@ -1120,12 +1152,52 @@
         editBtn.type = 'button';
         editBtn.className = 'secondary';
         editBtn.textContent = 'Edit';
+        editBtn.style.marginRight = '6px';
         editBtn.addEventListener('click', function () { startEditEmployee(emp); });
         actionsTd.appendChild(editBtn);
+
+        var statusBtn = document.createElement('button');
+        statusBtn.type = 'button';
+        statusBtn.className = 'secondary';
+        statusBtn.textContent = resigned ? 'Reactivate' : 'Mark Resigned';
+        statusBtn.addEventListener('click', function () {
+          setEmployeeStatus(emp, resigned ? 'Active' : 'Resigned', statusBtn);
+        });
+        actionsTd.appendChild(statusBtn);
         tr.appendChild(actionsTd);
 
         tbody.appendChild(tr);
       });
+    }
+
+    async function setEmployeeStatus(emp, status, btn) {
+      var password = document.getElementById('employee-admin-password').value;
+      if (!password) {
+        setStatus('employee-list-status', 'Enter the admin password above first.', 'error');
+        return;
+      }
+      if (status === 'Resigned' && !confirm(
+          'Mark ' + emp.name + ' (' + emp.employee_code + ') as Resigned?\n\n' +
+          'They will stop appearing in Missing Entries and in the team leader lists. ' +
+          'Their existing entries are kept.')) {
+        return;
+      }
+
+      btn.disabled = true;
+      setStatus('employee-list-status', 'Updating…', 'loading');
+      try {
+        await api('adminSetEmployeeStatus', {
+          password: password,
+          employee_code: emp.employee_code,
+          status: status
+        });
+      } catch (err) {
+        btn.disabled = false;
+        setStatus('employee-list-status', 'Error: ' + err.message, 'error');
+        return;
+      }
+      setStatus('employee-list-status', emp.name + ' is now ' + status + '.', 'success');
+      loadEmployees();
     }
 
     function startEditEmployee(emp) {
@@ -1140,6 +1212,7 @@
       document.getElementById('emp-teamLeader').value = emp.team_leader || '';
       document.getElementById('emp-sectionName').value = emp.section_name || '';
       document.getElementById('emp-zone').value = emp.zone || '';
+      document.getElementById('emp-status').value = emp.status || 'Active';
 
       document.getElementById('employee-form-title').textContent = 'Edit Employee: ' + emp.employee_code;
       document.getElementById('employee-submit-btn').textContent = 'Save Changes';
@@ -1184,7 +1257,8 @@
           email: document.getElementById('emp-email').value || null,
           team_leader: document.getElementById('emp-teamLeader').value || null,
           section_name: document.getElementById('emp-sectionName').value || null,
-          zone: document.getElementById('emp-zone').value || null
+          zone: document.getElementById('emp-zone').value || null,
+          status: document.getElementById('emp-status').value || null
         });
       } catch (err) {
         btn.disabled = false;
