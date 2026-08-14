@@ -3,8 +3,6 @@
 Two static web apps (a daily entry form and an admin dashboard) that read and
 write your Google Sheet directly. No build step, no npm, no database server.
 
-**Spreadsheet:** [`1s8TZ1V-slxyto0FW632jhUbqfAWVkS3LL-vt4zaPC9g`](https://docs.google.com/spreadsheets/d/1s8TZ1V-slxyto0FW632jhUbqfAWVkS3LL-vt4zaPC9g/edit)
-
 ## How it fits together
 
 GitHub Pages can only serve static files, and a browser has nowhere safe to
