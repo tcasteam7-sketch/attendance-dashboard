@@ -311,8 +311,10 @@
       </form>
 
       <p style="font-size:12px; color:var(--muted); margin:-8px 0 12px;">
-        Week offs are skipped: every <strong>Sunday</strong> and the <strong>3rd Saturday</strong> of
-        each month. Employees marked Resigned, and anyone with leave covering the date, are excluded too.
+        Skipped automatically: every <strong>Sunday</strong>, the <strong>3rd Saturday</strong> of each
+        month, and <strong>public holidays</strong>. Employees marked Resigned, and anyone with leave
+        covering the date, are excluded too.
+        <span id="holiday-coverage"></span>
       </p>
 
       <div class="status-line" id="missing-status"></div>
@@ -928,11 +930,32 @@
 
       var table = missingRowsToTable(data);
       setStatus('missing-status', data.length + ' missing record(s) found.', 'success');
+      reportHolidayCoverage(start, end);
       renderTable('missing-table', table.headers, table.rows, { 3: zoneBadge, 4: missingStatusBadge });
       lastMissingResult = table;
       document.getElementById('missing-download-btn').disabled = table.rows.length === 0;
       document.getElementById('missing-copy-btn').disabled = table.rows.length === 0;
     });
+
+    /* Festival dates are entered per year, so a check covering a year nobody has
+       filled in yet would quietly report those days as missing entries. Say so
+       instead of letting the number look authoritative. */
+    async function reportHolidayCoverage(start, end) {
+      var el = document.getElementById('holiday-coverage');
+      el.textContent = '';
+      var info;
+      try {
+        info = await api('getHolidays', { start: start, end: end });
+      } catch (err) {
+        return;   // older deployment without getHolidays — nothing to report
+      }
+      if (!info || !info.years_missing || !info.years_missing.length) return;
+
+      el.innerHTML = '<br><strong style="color:var(--red);">No festival holidays are listed for ' +
+        info.years_missing.join(', ') + '.</strong> Fixed dates like Republic Day still apply, but ' +
+        'festival days in ' + (info.years_missing.length > 1 ? 'those years' : 'that year') +
+        ' are being counted as working days. Add them to CONFIG.HOLIDAYS.BY_YEAR in WEB.gs.';
+    }
 
     document.getElementById('missing-clear-btn').addEventListener('click', function () {
       document.getElementById('missing-filters').reset();
